@@ -113,8 +113,8 @@ Summary <-->> Image
 - **DB**: SQLite (開発) / PostgreSQL (本番)
 - **ORM**: Prisma
 - **ファイルストレージ**: ローカルファイルシステム / AWS S3
-- **OCR処理**: Tesseract.js / Google Cloud Vision API
-- **要約処理**: OpenAI API
+- **OCR処理**: PaddleOCR
+- **要約処理**: LangChain
 
 ## セキュリティ対策
 
