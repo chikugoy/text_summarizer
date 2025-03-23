@@ -1,5 +1,6 @@
 from datetime import datetime
-from typing import List, Optional, UUID
+from typing import List, Optional
+from uuid import UUID
 from pydantic import BaseModel, Field
 
 
@@ -27,8 +28,9 @@ class SummaryBase(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = {
+        "from_attributes": True
+    }
 
 
 class SummaryDetail(SummaryBase):
@@ -36,8 +38,9 @@ class SummaryDetail(SummaryBase):
     original_text: str
     summarized_text: str
 
-    class Config:
-        orm_mode = True
+    model_config = {
+        "from_attributes": True
+    }
 
 
 class SummaryList(BaseModel):
@@ -47,5 +50,6 @@ class SummaryList(BaseModel):
     page: int
     page_size: int
     
-    class Config:
-        orm_mode = True
+    model_config = {
+        "from_attributes": True
+    }

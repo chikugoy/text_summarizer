@@ -6,7 +6,7 @@ import uuid
 from app.database import get_db
 from app.models import Image
 from app.schemas import OCRRequest, OCRResponse
-from app.services import ocr_service
+from app.services import get_ocr_service
 
 router = APIRouter()
 
@@ -27,6 +27,9 @@ def process_ocr(
                 detail=f"ID {image_id} の画像が見つかりません"
             )
         images.append(image)
+    
+    # OCRサービスを取得
+    ocr_service = get_ocr_service()
     
     # OCR処理の実行
     job_id = ocr_service.process_images(images)
@@ -60,6 +63,9 @@ def get_ocr_status(
     db: Session = Depends(get_db)
 ):
     """OCR処理のステータスを確認する"""
+    # OCRサービスを取得
+    ocr_service = get_ocr_service()
+    
     job_status = ocr_service.get_job_status(job_id)
     if not job_status:
         raise HTTPException(

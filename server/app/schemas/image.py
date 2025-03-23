@@ -1,5 +1,6 @@
 from datetime import datetime
-from typing import List, Optional, UUID
+from typing import List, Optional
+from uuid import UUID
 from pydantic import BaseModel, Field
 
 
@@ -25,8 +26,9 @@ class ImageBase(BaseModel):
     page_number: int
     created_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = {
+        "from_attributes": True
+    }
 
 
 class ImageDetail(ImageBase):
@@ -35,8 +37,9 @@ class ImageDetail(ImageBase):
     ocr_text: Optional[str] = None
     summary_id: UUID
 
-    class Config:
-        orm_mode = True
+    model_config = {
+        "from_attributes": True
+    }
 
 
 class ImageList(BaseModel):
@@ -44,8 +47,9 @@ class ImageList(BaseModel):
     items: List[ImageBase]
     total: int
     
-    class Config:
-        orm_mode = True
+    model_config = {
+        "from_attributes": True
+    }
 
 
 # OCR処理関連スキーマ

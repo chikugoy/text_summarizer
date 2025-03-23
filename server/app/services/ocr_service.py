@@ -1,7 +1,6 @@
 import os
 import uuid
 from typing import List, Dict, Any, Optional
-from paddleocr import PaddleOCR
 from PIL import Image as PILImage
 
 from app.config import settings
@@ -13,8 +12,17 @@ class OCRService:
     
     def __init__(self):
         """OCRエンジンの初期化"""
-        self.ocr = PaddleOCR(use_angle_cls=True, lang=settings.OCR_LANGUAGE)
+        self._ocr = None
         self._jobs: Dict[str, Dict[str, Any]] = {}  # ジョブID -> ジョブ情報
+    
+    @property
+    def ocr(self):
+        """遅延初期化されたOCRエンジンを取得"""
+        if self._ocr is None:
+            # 必要になった時点でPaddleOCRをインポートして初期化
+            from paddleocr import PaddleOCR
+            self._ocr = PaddleOCR(use_angle_cls=True, lang=settings.OCR_LANGUAGE)
+        return self._ocr
     
     def process_image(self, image_path: str) -> str:
         """画像からテキストを抽出する"""
