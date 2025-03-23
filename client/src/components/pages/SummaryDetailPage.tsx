@@ -2,54 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Calendar, Clock, Clipboard, Trash2, Edit } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
-
-// 要約詳細のモックデータ
-// 実際の実装では、APIサービスを使用します
-const mockFetchSummaryDetail = async (id: string): Promise<{
-  id: string;
-  title: string;
-  description: string | null;
-  originalText: string;
-  summarizedText: string;
-  createdAt: string;
-} | null> => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      if (id === 'summary-123456' || id.startsWith('summary-')) {
-        resolve({
-          id,
-          title: 'サンプル要約タイトル',
-          description: 'これはサンプルの要約説明です。実際の実装では、データベースから取得します。',
-          originalText: `これは、OCRによって抽出された元のテキストです。実際の実装では、アップロードされた画像から抽出されたテキストが表示されます。
-          
-          Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam auctor, nisl eget ultricies tincidunt, nisl nisl aliquam nisl, eget aliquam nisl nisl eget nisl. Nullam auctor, nisl eget ultricies tincidunt, nisl nisl aliquam nisl, eget aliquam nisl nisl eget nisl.
-          
-          サンプルテキストが続きます。これは長い文章の例です。実際のアプリケーションでは、ここに書籍のページから抽出されたテキストが表示されます。`,
-          summarizedText: `これはAIによって要約されたテキストです。実際の実装では、抽出されたテキストをAIが要約した結果が表示されます。
-
-          要約のポイント:
-          1. 重要なポイント1
-          2. 重要なポイント2
-          3. 重要なポイント3
-          
-          この要約は元のテキストの主要な内容を簡潔にまとめています。`,
-          createdAt: '2025-03-22T14:30:00Z',
-        });
-      } else {
-        resolve(null);
-      }
-    }, 1000);
-  });
-};
-
-// 要約を削除するモックサービス
-const mockDeleteSummary = async (id: string): Promise<boolean> => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve(true);
-    }, 800);
-  });
-};
+import { getSummaryDetail, deleteSummary, SummaryDetail } from '@/services';
 
 const formatDate = (dateString: string): string => {
   const date = new Date(dateString);
@@ -66,14 +19,17 @@ const SummaryDetailPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   
-  const [summary, setSummary] = useState<{
+  // 要約データの型定義
+  type FormattedSummary = {
     id: string;
     title: string;
     description: string | null;
     originalText: string;
     summarizedText: string;
     createdAt: string;
-  } | null>(null);
+  };
+  
+  const [summary, setSummary] = useState<FormattedSummary | null>(null);
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -86,14 +42,22 @@ const SummaryDetailPage = () => {
       if (!id) return;
       
       try {
-        const data = await mockFetchSummaryDetail(id);
-        if (data) {
-          setSummary(data);
-        } else {
-          setError('要約が見つかりませんでした');
-        }
+        const data = await getSummaryDetail(id);
+        
+        // APIレスポンスを適切な形式に変換
+        const formattedSummary: FormattedSummary = {
+          id: data.id,
+          title: data.title,
+          description: data.description,
+          originalText: data.original_text,
+          summarizedText: data.summarized_text,
+          createdAt: data.created_at
+        };
+        
+        setSummary(formattedSummary);
       } catch (err) {
-        setError('データの取得中にエラーが発生しました');
+        console.error('Failed to fetch summary detail:', err);
+        setError('要約の取得中にエラーが発生しました');
       } finally {
         setLoading(false);
       }
@@ -125,17 +89,15 @@ const SummaryDetailPage = () => {
     setIsDeleting(true);
     
     try {
-      const success = await mockDeleteSummary(id);
+      // 要約を削除
+      await deleteSummary(id);
       
-      if (success) {
-        toast({
-          title: '要約を削除しました',
-        });
-        navigate('/summaries');
-      } else {
-        throw new Error('削除に失敗しました');
-      }
+      toast({
+        title: '要約を削除しました',
+      });
+      navigate('/summaries');
     } catch (err) {
+      console.error('Delete summary error:', err);
       toast({
         title: '削除に失敗しました',
         variant: 'destructive',

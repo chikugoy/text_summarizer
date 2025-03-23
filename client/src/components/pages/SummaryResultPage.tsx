@@ -2,51 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Clipboard, Save, Loader2 } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
-
-// OCR処理と要約のモックサービス
-// 実際の実装では、APIサービスを使用します
-const mockFetchJobStatus = async (jobId: string): Promise<{
-  status: 'processing' | 'completed' | 'failed';
-  progress?: number;
-  originalText?: string;
-  summarizedText?: string;
-  error?: string;
-}> => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve({
-        status: 'completed',
-        originalText: `これは、OCRによって抽出された元のテキストです。実際の実装では、アップロードされた画像から抽出されたテキストが表示されます。
-        
-        Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam auctor, nisl eget ultricies tincidunt, nisl nisl aliquam nisl, eget aliquam nisl nisl eget nisl. Nullam auctor, nisl eget ultricies tincidunt, nisl nisl aliquam nisl, eget aliquam nisl nisl eget nisl.
-        
-        サンプルテキストが続きます。これは長い文章の例です。実際のアプリケーションでは、ここに書籍のページから抽出されたテキストが表示されます。`,
-        summarizedText: `これはAIによって要約されたテキストです。実際の実装では、抽出されたテキストをAIが要約した結果が表示されます。
-
-        要約のポイント:
-        1. 重要なポイント1
-        2. 重要なポイント2
-        3. 重要なポイント3
-        
-        この要約は元のテキストの主要な内容を簡潔にまとめています。`,
-      });
-    }, 2000);
-  });
-};
-
-// 要約を保存するモックサービス
-const mockSaveSummary = async (data: {
-  title: string;
-  description?: string;
-  originalText: string;
-  summarizedText: string;
-}): Promise<{ id: string }> => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve({ id: 'summary-123456' });
-    }, 1000);
-  });
-};
+import { getOCRStatus, waitForOCRCompletion, createSummary, generateSummary } from '@/services';
 
 const SummaryResultPage = () => {
   const { jobId } = useParams<{ jobId: string }>();
@@ -67,15 +23,52 @@ const SummaryResultPage = () => {
       if (!jobId) return;
       
       try {
-        const result = await mockFetchJobStatus(jobId);
+        // OCR処理のステータスを確認
+        const ocrStatus = await getOCRStatus(jobId);
         
-        if (result.status === 'failed') {
-          setError(result.error || '処理に失敗しました');
-        } else if (result.status === 'completed') {
-          setOriginalText(result.originalText || '');
-          setSummarizedText(result.summarizedText || '');
+        if (ocrStatus.status === 'failed') {
+          setError('OCR処理に失敗しました');
+          setLoading(false);
+          return;
+        }
+        
+        if (ocrStatus.status === 'processing') {
+          // 処理中の場合は完了を待機
+          try {
+            const completedStatus = await waitForOCRCompletion(jobId);
+            
+            if (completedStatus.status === 'failed') {
+              setError('OCR処理に失敗しました');
+              setLoading(false);
+              return;
+            }
+            
+            // OCR結果から要約を生成
+            const summaryId = completedStatus.results[0]?.image_id.split('-')[0];
+            if (summaryId) {
+              const summary = await generateSummary(summaryId);
+              setOriginalText(summary.original_text);
+              setSummarizedText(summary.summarized_text);
+            } else {
+              setError('要約の生成に失敗しました');
+            }
+          } catch (waitError) {
+            console.error('Waiting for OCR completion failed:', waitError);
+            setError('OCR処理の完了待機中にエラーが発生しました');
+          }
+        } else if (ocrStatus.status === 'completed') {
+          // 既に完了している場合
+          const summaryId = ocrStatus.results[0]?.image_id.split('-')[0];
+          if (summaryId) {
+            const summary = await generateSummary(summaryId);
+            setOriginalText(summary.original_text);
+            setSummarizedText(summary.summarized_text);
+          } else {
+            setError('要約の生成に失敗しました');
+          }
         }
       } catch (err) {
+        console.error('Fetch job status error:', err);
         setError('データの取得中にエラーが発生しました');
       } finally {
         setLoading(false);
@@ -112,11 +105,12 @@ const SummaryResultPage = () => {
     setSaving(true);
     
     try {
-      const result = await mockSaveSummary({
+      // 要約を保存
+      const summary = await createSummary({
         title,
-        description,
-        originalText,
-        summarizedText,
+        description: description || undefined,
+        original_text: originalText,
+        summarized_text: summarizedText,
       });
       
       toast({
@@ -124,8 +118,9 @@ const SummaryResultPage = () => {
       });
       
       // 保存した要約の詳細ページに遷移
-      navigate(`/summaries/${result.id}`);
+      navigate(`/summaries/${summary.id}`);
     } catch (err) {
+      console.error('Save summary error:', err);
       toast({
         title: '保存に失敗しました',
         variant: 'destructive',

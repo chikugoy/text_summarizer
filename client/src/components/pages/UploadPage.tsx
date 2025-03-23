@@ -3,18 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useDropzone } from 'react-dropzone';
 import { Upload, X, Image as ImageIcon } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
-
-// 画像アップロードのモックサービス
-// 実際の実装では、APIサービスを使用します
-const mockUploadImages = async (files: File[]): Promise<string> => {
-  // 実際のAPIリクエストをシミュレート
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      // 成功時はジョブIDを返す
-      resolve('job-123456');
-    }, 1500);
-  });
-};
+import { uploadImages, processOCR } from '@/services';
 
 const UploadPage = () => {
   const navigate = useNavigate();
@@ -60,12 +49,21 @@ const UploadPage = () => {
     setIsUploading(true);
     
     try {
-      // 画像をアップロードし、ジョブIDを取得
-      const jobId = await mockUploadImages(files);
+      // 画像をアップロードし、画像情報を取得
+      const uploadedImages = await uploadImages(files);
+      
+      if (uploadedImages.length === 0) {
+        throw new Error('画像のアップロードに失敗しました');
+      }
+      
+      // OCR処理を実行
+      const imageIds = uploadedImages.map(image => image.id);
+      const ocrResponse = await processOCR(imageIds);
       
       // 要約結果ページに遷移
-      navigate(`/result/${jobId}`);
+      navigate(`/result/${ocrResponse.job_id}`);
     } catch (error) {
+      console.error('Upload error:', error);
       toast({
         title: 'アップロードに失敗しました',
         description: '後でもう一度お試しください',

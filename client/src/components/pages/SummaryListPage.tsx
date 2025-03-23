@@ -1,58 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, Calendar, Clock, ChevronRight } from 'lucide-react';
-
-// 要約一覧のモックデータ
-// 実際の実装では、APIサービスを使用します
-const mockFetchSummaries = async (): Promise<Array<{
-  id: string;
-  title: string;
-  description: string | null;
-  createdAt: string;
-  summarizedText: string;
-}>> => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve([
-        {
-          id: 'summary-1',
-          title: '機械学習の基礎',
-          description: '機械学習の基本概念と手法について',
-          createdAt: '2025-03-20T10:30:00Z',
-          summarizedText: '機械学習は、コンピュータがデータから学習し、予測や判断を行う技術です。教師あり学習、教師なし学習、強化学習などの手法があります。'
-        },
-        {
-          id: 'summary-2',
-          title: 'Webアプリケーションセキュリティ',
-          description: null,
-          createdAt: '2025-03-18T15:45:00Z',
-          summarizedText: 'Webアプリケーションのセキュリティ対策として、入力検証、認証と認可、暗号化、XSS対策、CSRF対策などが重要です。'
-        },
-        {
-          id: 'summary-3',
-          title: 'クラウドコンピューティング入門',
-          description: 'クラウドサービスの種類と特徴',
-          createdAt: '2025-03-15T09:20:00Z',
-          summarizedText: 'クラウドコンピューティングは、インターネットを通じてコンピュータリソースを提供するサービスです。IaaS、PaaS、SaaSの3つの主要なサービスモデルがあります。'
-        },
-        {
-          id: 'summary-4',
-          title: 'プログラミング言語の比較',
-          description: '主要なプログラミング言語の特徴と用途',
-          createdAt: '2025-03-10T14:15:00Z',
-          summarizedText: 'プログラミング言語には、静的型付け言語と動的型付け言語、コンパイル言語とインタプリタ言語などの分類があります。用途に応じて適切な言語を選択することが重要です。'
-        },
-        {
-          id: 'summary-5',
-          title: 'データベース設計のベストプラクティス',
-          description: null,
-          createdAt: '2025-03-05T11:30:00Z',
-          summarizedText: 'データベース設計では、正規化、インデックス設計、トランザクション管理、セキュリティなどを考慮する必要があります。'
-        }
-      ]);
-    }, 1000);
-  });
-};
+import { getSummaries, SummaryBase, getSummaryDetail } from '@/services';
 
 const formatDate = (dateString: string): string => {
   const date = new Date(dateString);
@@ -72,22 +21,52 @@ const formatTime = (dateString: string): string => {
 };
 
 const SummaryListPage = () => {
-  const [summaries, setSummaries] = useState<Array<{
+  // 要約データの型定義
+  type SummaryItem = {
     id: string;
     title: string;
     description: string | null;
     createdAt: string;
     summarizedText: string;
-  }>>([]);
-  
+  };
+
+  const [summaries, setSummaries] = useState<SummaryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [page, setPage] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
 
   useEffect(() => {
     const fetchSummaries = async () => {
       try {
-        const data = await mockFetchSummaries();
-        setSummaries(data);
+        const response = await getSummaries(page, 10);
+        
+        // 各要約の詳細情報を取得
+        const detailPromises = response.items.map(async (item) => {
+          try {
+            const detail = await getSummaryDetail(item.id);
+            return {
+              id: item.id,
+              title: item.title,
+              description: item.description,
+              createdAt: item.created_at,
+              summarizedText: detail.summarized_text
+            };
+          } catch (err) {
+            console.error(`Failed to fetch detail for summary ${item.id}:`, err);
+            return {
+              id: item.id,
+              title: item.title,
+              description: item.description,
+              createdAt: item.created_at,
+              summarizedText: '要約テキストの取得に失敗しました'
+            };
+          }
+        });
+        
+        const formattedSummaries = await Promise.all(detailPromises);
+        setSummaries(formattedSummaries);
+        setTotalItems(response.total);
       } catch (error) {
         console.error('Failed to fetch summaries:', error);
       } finally {
@@ -96,7 +75,7 @@ const SummaryListPage = () => {
     };
 
     fetchSummaries();
-  }, []);
+  }, [page]);
 
   const filteredSummaries = summaries.filter(summary => 
     summary.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
