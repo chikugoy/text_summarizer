@@ -109,7 +109,7 @@ Summary <-->> Image
 
 ### バックエンド
 - **フレームワーク**: FastAPI
-- **言語**: Python 3.12.9
+- **言語**: Python
 - **DB**: PostgreSQL
 - **ORM**: SQLAlchemy
 - **キャッシュ**: Redis
@@ -145,9 +145,20 @@ Summary <-->> Image
 git clone https://github.com/yourusername/text-summarizer.git
 cd text-summarizer
 
-# Docker Composeでデータベースを起動
+# Docker Composeでサーバーとデータベースを起動
+# 必要に応じてdocker-compose.ymlのOPENAI_API_KEYを設定
 docker-compose up -d
 
+# アップロードディレクトリを作成
+mkdir -p uploads
+```
+
+バックエンドサーバーは`http://localhost:8000`で起動します。
+APIドキュメントは`http://localhost:8000/api/docs`で確認できます。
+
+### 開発モードでの実行（Docker Compose不使用）
+
+```bash
 # サーバー側の環境変数設定
 cd server
 cp .env.example .env
@@ -159,9 +170,6 @@ pip install -r requirements.txt
 # サーバーを起動
 python main.py
 ```
-
-バックエンドサーバーは`http://localhost:8000`で起動します。
-APIドキュメントは`http://localhost:8000/api/docs`で確認できます。
 
 ### フロントエンド開発環境の構築
 
