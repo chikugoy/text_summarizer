@@ -15,12 +15,12 @@
 - **デザインパターン**: サービスロケーターパターン
 
 ### バックエンド
-- **フレームワーク**: NestJS
-- **言語**: TypeScript (厳格化モード)
+- **フレームワーク**: FastAPI
+- **言語**: Python
 
 ## コーディング規約
 
-### 全般
+### フロントエンド
 
 1. **TypeScript厳格化モード**:
    - `strict: true`を設定
@@ -36,7 +36,7 @@
    - **変数・関数**: キャメルケース (`myVariable`, `myFunction`)
    - **クラス・インターフェース**: パスカルケース (`MyClass`, `MyInterface`)
    - **定数**: 大文字スネークケース (`MY_CONSTANT`)
-   - **ファイル名**: キャメルケース (`myComponent.tsx`, `myService.ts`)
+   - **ファイル名**: キャメルケース (`myService.ts`)
    - **コンポーネントファイル名**: パスカルケース (`Button.tsx`, `Header.tsx`)
 
 3. **コメント**:
@@ -50,16 +50,14 @@
    - 型定義
    - スタイル
 
-### フロントエンド
-
-1. **Atomic Design**:
+5. **Atomic Design**:
    - `atoms/`: 最小単位のUIコンポーネント（Button, Input, Icon等）
    - `molecules/`: atomsを組み合わせた小さなコンポーネント（SearchBox, Card等）
    - `organisms/`: 複数のmoleculesとatomsで構成される大きなコンポーネント（Header, Footer等）
    - `templates/`: ページのレイアウト構造を定義
    - `pages/`: 実際のページコンポーネント
 
-2. **コンポーネント**:
+6. **コンポーネント**:
    - 関数コンポーネントのみ使用
    - Propsには必ず型定義
    - デフォルトエクスポートを使用
@@ -92,10 +90,17 @@
 
 ### バックエンド
 
-1. **NestJS構造**:
-   - モジュール、コントローラー、サービス、DTOの適切な分離
-   - 依存性注入を活用
-   - 例外フィルターを使用したエラーハンドリング
+1. **命名規則**:
+   - **変数・関数**: スネークケース (`my_variable`, `my_function`)
+   - **クラス**: パスカルケース (`MyClass`)
+   - **定数**: 大文字スネークケース (`MY_CONSTANT`)
+   - **ファイル名**: スネークケース (`my_module.py`)
+   - **プライベート変数/メソッド**: アンダースコア接頭辞 (`_private_var`)
+
+2. **FastAPI構造**:
+   - ルーター、モデル、スキーマ、依存関係の適切な分離
+   - Pydanticモデルを活用したデータバリデーション
+   - 依存性注入システムを活用
 
 2. **API設計**:
    - RESTful原則に従う
@@ -144,20 +149,34 @@ client/
 ### バックエンド
 ```
 server/
-├── src/
-│   ├── main.ts
-│   ├── app.module.ts
-│   ├── app.controller.ts
-│   ├── app.service.ts
-│   └── modules/
-│       ├── **/
-│       │   ├── **.module.ts
-│       │   ├── **.controller.ts
-│       │   ├── **.service.ts
-│       │   ├── dto/
-│       │   └── entities/
-│       └── ...
-└── ...
+├── main.py
+├── requirements.txt
+├── app/
+│   ├── __init__.py
+│   ├── config.py
+│   ├── database.py
+│   ├── dependencies.py
+│   ├── models/
+│   │   ├── __init__.py
+│   │   └── *.py
+│   ├── schemas/
+│   │   ├── __init__.py
+│   │   └── *.py
+│   ├── api/
+│   │   ├── __init__.py
+│   │   ├── endpoints/
+│   │   │   ├── __init__.py
+│   │   │   └── *.py
+│   │   └── routes.py
+│   ├── services/
+│   │   ├── __init__.py
+│   │   └── *.py
+│   └── utils/
+│       ├── __init__.py
+│       └── *.py
+└── tests/
+    ├── __init__.py
+    └── test_*.py
 ```
 
 ## テスト
@@ -169,8 +188,9 @@ server/
    - 統合テスト
 
 2. **バックエンド**:
-   - Jestを使用
+   - Pytestを使用
    - ユニットテスト
+   - 統合テスト
    - E2Eテスト
 
 ## Git規約

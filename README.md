@@ -108,10 +108,10 @@ Summary <-->> Image
 - **HTTP通信**: Axios
 
 ### バックエンド
-- **フレームワーク**: 
-- **言語**: TypeScript
+- **フレームワーク**: FastAPI
+- **言語**: Python
 - **DB**: SQLite (開発) / PostgreSQL (本番)
-- **ORM**: Prisma
+- **ORM**: SQLAlchemy
 - **ファイルストレージ**: ローカルファイルシステム / AWS S3
 - **OCR処理**: PaddleOCR
 - **要約処理**: LangChain
