@@ -109,9 +109,10 @@ Summary <-->> Image
 
 ### バックエンド
 - **フレームワーク**: FastAPI
-- **言語**: Python
-- **DB**: SQLite (開発) / PostgreSQL (本番)
+- **言語**: Python 3.12.9
+- **DB**: PostgreSQL
 - **ORM**: SQLAlchemy
+- **キャッシュ**: Redis
 - **ファイルストレージ**: ローカルファイルシステム / AWS S3
 - **OCR処理**: PaddleOCR
 - **要約処理**: LangChain
@@ -135,26 +136,45 @@ Summary <-->> Image
 
 - Node.js 18.x以上
 - npm 9.x以上
+- Docker および Docker Compose
 
-### ローカル開発環境の構築
+### Docker Composeを使用した環境構築
 
 ```bash
 # リポジトリをクローン
 git clone https://github.com/yourusername/text-summarizer.git
 cd text-summarizer
 
-# 開発用環境変数の設定
-cp .env.example .env
-# .envファイルを適宜編集
+# Docker Composeでデータベースを起動
+docker-compose up -d
 
-# 依存パッケージのインストール
+# サーバー側の環境変数設定
+cd server
+cp .env.example .env
+# 必要に応じて.envファイルを編集（OpenAI APIキーなど）
+
+# サーバー側の依存パッケージをインストール
+pip install -r requirements.txt
+
+# サーバーを起動
+python main.py
+```
+
+バックエンドサーバーは`http://localhost:8000`で起動します。
+APIドキュメントは`http://localhost:8000/api/docs`で確認できます。
+
+### フロントエンド開発環境の構築
+
+```bash
+# クライアント側の依存パッケージをインストール
+cd client
 npm install
 
 # 開発モードで実行
 npm run dev
 ```
 
-サーバーは`http://localhost:3000`で起動します。
+フロントエンドサーバーは`http://localhost:3000`で起動します。
 
 ## デプロイ
 
