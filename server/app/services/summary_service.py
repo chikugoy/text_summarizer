@@ -1,7 +1,8 @@
 from typing import List, Dict, Any, Optional
-from langchain.llms import OpenAI
+from langchain.chat_models import ChatOpenAI
 from langchain.chains.summarize import load_summarize_chain
 from langchain.docstore.document import Document
+import os
 
 from app.config import settings
 
@@ -11,8 +12,10 @@ class SummaryService:
     
     def __init__(self):
         """LLMの初期化"""
+        # 環境変数を設定
         if settings.OPENAI_API_KEY:
-            self.llm = OpenAI(temperature=0, model_name=settings.AI_MODEL)
+            os.environ["OPENAI_API_KEY"] = settings.OPENAI_API_KEY
+            self.llm = ChatOpenAI(temperature=0, model_name=settings.AI_MODEL)
         else:
             self.llm = None
             print("警告: OPENAI_API_KEYが設定されていません。要約機能は利用できません。")
