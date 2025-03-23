@@ -1,0 +1,204 @@
+# プロジェクトコーディング規約
+
+## プロジェクト概要
+
+### フロントエンド
+- **フレームワーク**: Next.js
+- **ビルドツール**: Vite
+- **UIライブラリ**: Shadcn/ui
+- **アーキテクチャ**: Atomic Design構成
+- **フォーム管理**: React Hook Form + Zod
+- **ルーティング**: React Router
+- **状態管理**: Zustand/Jotai
+- **スキーマ定義**: Zod
+- **ロジック分離**: カスタムフック
+- **デザインパターン**: サービスロケーターパターン
+
+### バックエンド
+- **フレームワーク**: NestJS
+- **言語**: TypeScript (厳格化モード)
+
+## コーディング規約
+
+### 全般
+
+1. **TypeScript厳格化モード**:
+   - `strict: true`を設定
+   - `noImplicitAny: true`
+   - `strictNullChecks: true`
+   - `strictFunctionTypes: true`
+   - `strictBindCallApply: true`
+   - `strictPropertyInitialization: true`
+   - `noImplicitThis: true`
+   - `alwaysStrict: true`
+
+2. **命名規則**:
+   - **変数・関数**: キャメルケース (`myVariable`, `myFunction`)
+   - **クラス・インターフェース**: パスカルケース (`MyClass`, `MyInterface`)
+   - **定数**: 大文字スネークケース (`MY_CONSTANT`)
+   - **ファイル名**: キャメルケース (`myComponent.tsx`, `myService.ts`)
+   - **コンポーネントファイル名**: パスカルケース (`Button.tsx`, `Header.tsx`)
+
+3. **コメント**:
+   - 複雑なロジックには必ずコメントを付ける
+   - JSDoc形式を使用する
+   - 日本語コメントを推奨
+
+4. **インポート順序**:
+   - 外部ライブラリ
+   - 内部モジュール（相対パス）
+   - 型定義
+   - スタイル
+
+### フロントエンド
+
+1. **Atomic Design**:
+   - `atoms/`: 最小単位のUIコンポーネント（Button, Input, Icon等）
+   - `molecules/`: atomsを組み合わせた小さなコンポーネント（SearchBox, Card等）
+   - `organisms/`: 複数のmoleculesとatomsで構成される大きなコンポーネント（Header, Footer等）
+   - `templates/`: ページのレイアウト構造を定義
+   - `pages/`: 実際のページコンポーネント
+
+2. **コンポーネント**:
+   - 関数コンポーネントのみ使用
+   - Propsには必ず型定義
+   - デフォルトエクスポートを使用
+
+3. **スタイリング**:
+   - Tailwind CSSを使用
+   - `cn`ユーティリティを使用してクラス名を条件付きで結合
+   - グローバルスタイルは最小限に抑える
+
+4. **フォーム**:
+   - React Hook Formを使用
+   - バリデーションはZodで定義
+   - スキーマは`/schemas`ディレクトリに配置
+
+5. **状態管理**:
+   - グローバル状態: Zustand
+   - ローカル状態: React Hooks (useState, useReducer)
+   - 派生状態: Jotai
+   - コンテキストは最小限に抑える
+
+6. **カスタムフック**:
+   - ロジックは可能な限りカスタムフックに分離
+   - フック名は`use`プレフィックスで始める
+   - `/hooks`ディレクトリに配置
+
+7. **API通信**:
+   - サービスロケーターパターンを使用
+   - `/services`ディレクトリに配置
+   - エラーハンドリングを適切に実装
+
+### バックエンド
+
+1. **NestJS構造**:
+   - モジュール、コントローラー、サービス、DTOの適切な分離
+   - 依存性注入を活用
+   - 例外フィルターを使用したエラーハンドリング
+
+2. **API設計**:
+   - RESTful原則に従う
+   - エンドポイントは名詞を使用 (`/users`, `/videos`)
+   - HTTPメソッドを適切に使用 (GET, POST, PUT, DELETE)
+   - レスポンスは一貫した形式で返す
+
+3. **バリデーション**:
+   - DTOにはクラスバリデーターを使用
+   - 入力値は必ず検証
+
+4. **エラーハンドリング**:
+   - 適切な例外クラスを使用
+   - エラーレスポンスは統一フォーマット
+
+5. **環境変数**:
+   - `.env`ファイルを使用
+   - 機密情報はコミットしない
+   - 環境変数の型定義
+
+## ディレクトリ構造
+
+### フロントエンド
+```
+client/
+├── public/
+├── src/
+│   ├── assets/
+│   ├── components/
+│   │   ├── atoms/
+│   │   ├── molecules/
+│   │   ├── organisms/
+│   │   ├── templates/
+│   │   └── pages/
+│   ├── hooks/
+│   ├── services/
+│   ├── store/
+│   ├── types/
+│   ├── utils/
+│   ├── schemas/
+│   ├── App.tsx
+│   └── main.tsx
+└── ...
+```
+
+### バックエンド
+```
+server/
+├── src/
+│   ├── main.ts
+│   ├── app.module.ts
+│   ├── app.controller.ts
+│   ├── app.service.ts
+│   └── modules/
+│       ├── **/
+│       │   ├── **.module.ts
+│       │   ├── **.controller.ts
+│       │   ├── **.service.ts
+│       │   ├── dto/
+│       │   └── entities/
+│       └── ...
+└── ...
+```
+
+## テスト
+
+1. **フロントエンド**:
+   - Jest + React Testing Libraryを使用
+   - コンポーネントテスト
+   - カスタムフックテスト
+   - 統合テスト
+
+2. **バックエンド**:
+   - Jestを使用
+   - ユニットテスト
+   - E2Eテスト
+
+## Git規約
+
+1. **ブランチ命名**:
+   - 機能追加: `feature/機能名`
+   - バグ修正: `fix/バグ名`
+   - リファクタリング: `refactor/内容`
+   - ドキュメント: `docs/内容`
+
+2. **コミットメッセージ**:
+   - 先頭に種類を記載: `feat:`, `fix:`, `docs:`, `style:`, `refactor:`, `test:`, `chore:`
+   - 日本語で簡潔に内容を記述
+
+3. **プルリクエスト**:
+   - タイトルは変更内容を簡潔に
+   - 説明には変更理由と影響範囲を記載
+   - レビュアーを指定
+
+## パフォーマンス最適化
+
+1. **フロントエンド**:
+   - メモ化 (`useMemo`, `useCallback`, `memo`)
+   - コード分割
+   - 画像最適化
+   - バンドルサイズの監視
+
+2. **バックエンド**:
+   - キャッシュ戦略
+   - データベースクエリの最適化
+   - 非同期処理の適切な使用
