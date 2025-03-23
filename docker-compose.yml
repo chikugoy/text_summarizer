@@ -3,22 +3,22 @@ version: '3.8'
 services:
   postgres:
     image: postgres:17-alpine
-    container_name: prompt_db_postgres
+    container_name: text_summarizer_db_postgres
     restart: always
     ports:
       - "5432:5432"
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: prompt_db
+      POSTGRES_DB: text_summarizer_db
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
-      - prompt_db_network
+      - text_summarizer_db_network
 
   redis:
     image: redis:alpine
-    container_name: prompt_db_redis
+    container_name: text_summarizer_db_redis
     restart: always
     ports:
       - "6379:6379"
@@ -26,10 +26,10 @@ services:
     volumes:
       - redis_data:/data
     networks:
-      - prompt_db_network
+      - text_summarizer_db_network
 
 networks:
-  prompt_db_network:
+  text_summarizer_db_network:
     driver: bridge
 
 volumes:

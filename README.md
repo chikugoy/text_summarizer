@@ -108,7 +108,7 @@ Summary <-->> Image
 - **HTTP通信**: Axios
 
 ### バックエンド
-- **フレームワーク**: Express.js
+- **フレームワーク**: 
 - **言語**: TypeScript
 - **DB**: SQLite (開発) / PostgreSQL (本番)
 - **ORM**: Prisma
