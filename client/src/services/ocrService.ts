@@ -19,16 +19,22 @@ export interface OCRResponse {
 
 export interface OCRRequest {
   image_ids: string[];
+  lang: string;
 }
 
 /**
  * アップロードされた画像のOCR処理を実行する
  * @param imageIds OCR処理を行う画像IDの配列
+ * @param lang 言語コード (例: 'ja', 'en')
  * @returns OCR処理の結果
  */
-export const processOCR = async (imageIds: string[]): Promise<OCRResponse> => {
+export const processOCR = async (imageIds: string[], lang: string = 'ja'): Promise<OCRResponse> => {
+  // 言語コード変換 (ja → japan)
+  const ocrLang = lang === 'ja' ? 'japan' : lang;
+  
   const response = await api.post<OCRResponse>('/ocr/process', {
     image_ids: imageIds,
+    lang: ocrLang,
   });
   
   return response.data;

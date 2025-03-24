@@ -36,7 +36,7 @@ export interface SummaryUpdate {
   description?: string;
 }
 
-/**
+/*
  * OCR処理された文章から要約を生成して保存する
  * @param summary 要約データ
  * @returns 作成された要約
@@ -52,8 +52,8 @@ export const createSummary = async (summary: SummaryCreate): Promise<SummaryDeta
  * @returns 生成された要約
  */
 export const generateSummary = async (summaryId: string): Promise<SummaryDetail> => {
-  const response = await api.post<SummaryDetail>(`/generate`, null, {
-    params: { summary_id: summaryId }
+  const response = await api.post<SummaryDetail>(`/summaries/generate`, {
+    summary_id: summaryId
   });
   return response.data;
 };

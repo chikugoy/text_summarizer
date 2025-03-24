@@ -56,9 +56,9 @@ const UploadPage = () => {
         throw new Error('画像のアップロードに失敗しました');
       }
       
-      // OCR処理を実行
+      // OCR処理を実行 (日本語テキストを想定)
       const imageIds = uploadedImages.map(image => image.id);
-      const ocrResponse = await processOCR(imageIds);
+      const ocrResponse = await processOCR(imageIds, 'ja');
       
       // 要約結果ページに遷移
       navigate(`/result/${ocrResponse.job_id}`);

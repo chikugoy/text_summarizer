@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Clipboard, Save, Loader2 } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import { getOCRStatus, waitForOCRCompletion, createSummary, generateSummary } from '@/services';
+import { getImageDetail } from '@/services/imageService';
 
 const SummaryResultPage = () => {
   const { jobId } = useParams<{ jobId: string }>();
@@ -43,9 +44,14 @@ const SummaryResultPage = () => {
               return;
             }
             
-            // OCR結果から要約を生成
-            const summaryId = completedStatus.results[0]?.image_id.split('-')[0];
-            if (summaryId) {
+            // OCR結果から画像IDを取得
+            const imageId = completedStatus.results[0]?.image_id;
+            if (imageId) {
+              // 画像の詳細情報を取得して要約IDを取得
+              const imageDetail = await getImageDetail(imageId);
+              const summaryId = imageDetail.summary_id;
+              
+              // 要約を生成
               const summary = await generateSummary(summaryId);
               setOriginalText(summary.original_text);
               setSummarizedText(summary.summarized_text);
@@ -58,8 +64,13 @@ const SummaryResultPage = () => {
           }
         } else if (ocrStatus.status === 'completed') {
           // 既に完了している場合
-          const summaryId = ocrStatus.results[0]?.image_id.split('-')[0];
-          if (summaryId) {
+          const imageId = ocrStatus.results[0]?.image_id;
+          if (imageId) {
+            // 画像の詳細情報を取得して要約IDを取得
+            const imageDetail = await getImageDetail(imageId);
+            const summaryId = imageDetail.summary_id;
+            
+            // 要約を生成
             const summary = await generateSummary(summaryId);
             setOriginalText(summary.original_text);
             setSummarizedText(summary.summarized_text);
