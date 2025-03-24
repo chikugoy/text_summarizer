@@ -19,6 +19,11 @@ class SummaryUpdate(BaseModel):
     description: Optional[str] = Field(None, description="要約の説明")
 
 
+class SummaryGenerate(BaseModel):
+    """要約生成リクエスト"""
+    summary_id: UUID = Field(..., description="要約ID")
+
+
 # レスポンス用スキーマ
 class SummaryBase(BaseModel):
     """要約の基本情報"""

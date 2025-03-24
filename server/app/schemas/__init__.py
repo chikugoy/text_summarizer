@@ -1,6 +1,6 @@
 from app.schemas.summary import (
-    SummaryBase, SummaryCreate, SummaryUpdate, 
-    SummaryDetail, SummaryList
+    SummaryBase, SummaryCreate, SummaryUpdate,
+    SummaryDetail, SummaryList, SummaryGenerate
 )
 from app.schemas.image import (
     ImageBase, ImageCreate, ImageDetail, ImageList,

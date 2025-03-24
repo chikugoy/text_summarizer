@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     
     # アプリケーション設定
     APP_NAME: str = "TextSummarizer"
-    DEBUG: bool = False
+    DEBUG: bool = True
     SECRET_KEY: str
     ALLOWED_HOSTS: List[str] = ["localhost", "127.0.0.1"]
     

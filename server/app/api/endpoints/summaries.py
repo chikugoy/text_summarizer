@@ -2,11 +2,12 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 import uuid
+from datetime import datetime
 
 from app.database import get_db
 from app.models import Summary, Image
-from app.schemas import SummaryCreate, SummaryUpdate, SummaryBase, SummaryDetail, SummaryList
-from app.services import summary_service
+from app.schemas import SummaryCreate, SummaryUpdate, SummaryBase, SummaryDetail, SummaryList, SummaryGenerate
+from app.services import summary_service, ocr_service
 
 router = APIRouter()
 
@@ -28,15 +29,56 @@ def create_summary(
     db.add(db_summary)
     db.commit()
     db.refresh(db_summary)
+
+@router.post("/generate", response_model=SummaryDetail)
+def generate_summary(
+    summary_data: SummaryGenerate,
+    db: Session = Depends(get_db)
+):
+    """画像からOCRテキストを抽出し、要約を生成する"""
+    try:
+        # 1. 画像情報を取得
+        image = db.query(Image).filter(Image.summary_id == summary_data.summary_id).first()
+        if not image:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Image not found"
+            )
+
+        # 2. OCR処理でテキストを取得
+        ocr_text = ocr_service.process_image(image.file_path)
+        
+        # 3. AIで要約を生成
+        summary_text = summary_service.generate_summary(ocr_text)
+        
+        # 4. 要約を保存
+        summary = Summary(
+            title=f"要約_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+            original_text=ocr_text,
+            summarized_text=summary_text
+        )
+        
+        db.add(summary)
+        db.commit()
+        db.refresh(summary)
+        
+        return summary
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error generating summary: {str(e)}"
+        )
     
     return db_summary
 
 
 @router.post("/generate", response_model=SummaryDetail)
 def generate_summary(
-    summary_id: uuid.UUID,
+    request: SummaryGenerate,
     db: Session = Depends(get_db)
 ):
+    summary_id = request.summary_id
     """特定の要約IDに関連する画像からOCRテキストを抽出し、要約を生成する"""
     # 要約の存在確認
     summary = db.query(Summary).filter(Summary.id == summary_id).first()
