@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024  # 10MB
     
     # OCR設定
-    OCR_LANGUAGE: str = "japan"
+    OCR_LANGUAGE: str = "japanese"
     
     # AI設定
     OPENAI_API_KEY: Optional[str] = None

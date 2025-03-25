@@ -27,19 +27,22 @@ class OCRService:
     def process_image(self, image_path: str) -> str:
         """画像からテキストを抽出する"""
         try:
-            # 画像を読み込む
+            # 画像を読み込み（明示的にエンコーディング指定）
             img = PILImage.open(image_path)
             
-            # OCR処理を実行
+            # OCR処理を実行（日本語指定）
             result = self.ocr.ocr(image_path, cls=True)
             
-            # 結果を整形
+            # 結果を整形（UTF-8で統一）
             extracted_text = ""
             if result:
                 for line in result:
                     for word_info in line:
                         if len(word_info) >= 2:  # 座標と(テキスト, 信頼度)のタプル
-                            extracted_text += word_info[1][0] + " "
+                            text = word_info[1][0]
+                            # テキストをUTF-8でエンコードしてデコード（不正な文字を除去）
+                            text = text.encode('utf-8', errors='ignore').decode('utf-8')
+                            extracted_text += text + " "
                     extracted_text += "\n"
             
             return extracted_text.strip()

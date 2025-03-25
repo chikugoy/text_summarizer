@@ -52,6 +52,14 @@ export const createSummary = async (summary: SummaryCreate): Promise<SummaryDeta
  * @returns 生成された要約
  */
 export const generateSummary = async (summaryId: string): Promise<SummaryDetail> => {
+  console.log(`generateSummary 呼び出し: summaryId=${summaryId}, type=${typeof summaryId}`);
+  
+  // UUIDの形式を確認（正規表現）
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!uuidRegex.test(summaryId)) {
+    console.error(`summaryId が正しいUUID形式ではありません: ${summaryId}`);
+  }
+  
   const response = await api.post<SummaryDetail>(`/summaries/generate`, {
     summary_id: summaryId
   });

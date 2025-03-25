@@ -52,9 +52,16 @@ const SummaryResultPage = () => {
               const summaryId = imageDetail.summary_id;
               
               // 要約を生成
-              const summary = await generateSummary(summaryId);
-              setOriginalText(summary.original_text);
-              setSummarizedText(summary.summarized_text);
+              try {
+                console.log(`要約生成開始: summaryId=${summaryId}, 型=${typeof summaryId}`);
+                const summary = await generateSummary(summaryId);
+                console.log(`要約生成完了:`, summary);
+                setOriginalText(summary.original_text);
+                setSummarizedText(summary.summarized_text);
+              } catch (error) {
+                console.error('要約生成エラー:', error);
+                setError(`要約の生成中にエラーが発生しました: ${error instanceof Error ? error.message : String(error)}`);
+              }
             } else {
               setError('要約の生成に失敗しました');
             }
@@ -71,9 +78,16 @@ const SummaryResultPage = () => {
             const summaryId = imageDetail.summary_id;
             
             // 要約を生成
-            const summary = await generateSummary(summaryId);
-            setOriginalText(summary.original_text);
-            setSummarizedText(summary.summarized_text);
+            try {
+              console.log(`要約生成開始: summaryId=${summaryId}, 型=${typeof summaryId}`);
+              const summary = await generateSummary(summaryId);
+              console.log(`要約生成完了:`, summary);
+              setOriginalText(summary.original_text);
+              setSummarizedText(summary.summarized_text);
+            } catch (error) {
+              console.error('要約生成エラー:', error);
+              setError(`要約の生成中にエラーが発生しました: ${error instanceof Error ? error.message : String(error)}`);
+            }
           } else {
             setError('要約の生成に失敗しました');
           }
