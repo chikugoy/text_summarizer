@@ -1,5 +1,6 @@
 import os
 import uuid
+import sys
 from typing import List, Dict, Any, Optional
 from PIL import Image as PILImage
 
@@ -67,7 +68,8 @@ class OCRService:
         # 非同期処理を模倣（実際の実装では非同期タスクを使用）
         for image in images:
             try:
-                ocr_text = self.process_image(image.file_path)
+                ocr_text = self.process_image(image.file_path)                
+                print(f"ocr_text: {ocr_text}", file=sys.stderr)
                 self._jobs[job_id]["results"][str(image.id)] = {
                     "image_id": image.id,
                     "ocr_text": ocr_text,
