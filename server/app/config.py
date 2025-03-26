@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     
     # OCR設定
     OCR_LANGUAGE: str = "japanese"
+    GOOGLE_APPLICATION_CREDENTIALS: Optional[str] = None
     
     # AI設定
     OPENAI_API_KEY: Optional[str] = None

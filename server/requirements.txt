@@ -13,8 +13,9 @@ psycopg2-binary==2.9.9  # PostgreSQL用
 python-dotenv==1.0.0
 
 # OCR
-paddleocr==2.7.0
+paddleocr==2.7.0  # 互換性維持のため残す
 paddlepaddle==2.5.2
+google-cloud-vision==3.4.4
 
 # AI/ML
 langchain==0.0.335

@@ -7,56 +7,27 @@ from PIL import Image as PILImage
 from app.config import settings
 from app.models import Image
 
+try:
+    from google.cloud import vision
+    from google.api_core.exceptions import GoogleAPICallError
+    HAS_GOOGLE_VISION = True
+except ImportError:
+    HAS_GOOGLE_VISION = False
 
-class OCRService:
-    """OCR処理サービス"""
+class BaseOCRService:
+    """OCRサービスのベースクラス"""
     
     def __init__(self):
-        """OCRエンジンの初期化"""
-        self._ocr = None
         self._jobs: Dict[str, Dict[str, Any]] = {}  # ジョブID -> ジョブ情報
     
-    @property
-    def ocr(self):
-        """遅延初期化されたOCRエンジンを取得"""
-        if self._ocr is None:
-            # 必要になった時点でPaddleOCRをインポートして初期化
-            from paddleocr import PaddleOCR
-            self._ocr = PaddleOCR(use_angle_cls=True, lang=settings.OCR_LANGUAGE)
-        return self._ocr
-    
     def process_image(self, image_path: str) -> str:
-        """画像からテキストを抽出する"""
-        try:
-            # 画像を読み込み（明示的にエンコーディング指定）
-            img = PILImage.open(image_path)
-            
-            # OCR処理を実行（日本語指定）
-            result = self.ocr.ocr(image_path, cls=True)
-            
-            # 結果を整形（UTF-8で統一）
-            extracted_text = ""
-            if result:
-                for line in result:
-                    for word_info in line:
-                        if len(word_info) >= 2:  # 座標と(テキスト, 信頼度)のタプル
-                            text = word_info[1][0]
-                            # テキストをUTF-8でエンコードしてデコード（不正な文字を除去）
-                            text = text.encode('utf-8', errors='ignore').decode('utf-8')
-                            extracted_text += text + " "
-                    extracted_text += "\n"
-            
-            return extracted_text.strip()
-        except Exception as e:
-            # エラーログを出力
-            print(f"OCR処理エラー: {str(e)}")
-            return ""
+        """画像からテキストを抽出する（サブクラスで実装）"""
+        raise NotImplementedError
     
     def process_images(self, images: List[Image]) -> str:
         """複数の画像を処理し、ジョブIDを返す"""
         job_id = str(uuid.uuid4())
         
-        # ジョブ情報を保存
         self._jobs[job_id] = {
             "images": images,
             "results": {},
@@ -65,7 +36,6 @@ class OCRService:
             "completed": 0
         }
         
-        # 非同期処理を模倣（実際の実装では非同期タスクを使用）
         for image in images:
             try:
                 ocr_text = self.process_image(image.file_path)                
@@ -86,9 +56,7 @@ class OCRService:
                 }
                 self._jobs[job_id]["completed"] += 1
         
-        # すべての処理が完了したらステータスを更新
         self._jobs[job_id]["status"] = "completed"
-        
         return job_id
     
     def get_job_status(self, job_id: str) -> Optional[Dict[str, Any]]:
@@ -105,6 +73,80 @@ class OCRService:
             "results": list(job["results"].values())
         }
 
+class GoogleVisionOCRService(BaseOCRService):
+    """Google Vision APIを使用したOCRサービス"""
+    
+    def __init__(self):
+        super().__init__()
+        self._client = None
+    
+    @property
+    def client(self):
+        """Google Visionクライアントを取得（遅延初期化）"""
+        if self._client is None:
+            self._client = vision.ImageAnnotatorClient()
+        return self._client
+    
+    def process_image(self, image_path: str) -> str:
+        """Google Vision APIで画像からテキストを抽出"""
+        try:
+            with open(image_path, 'rb') as image_file:
+                content = image_file.read()
+            
+            image = vision.Image(content=content)
+            response = self.client.document_text_detection(image=image)
+            
+            if response.error.message:
+                raise GoogleAPICallError(response.error.message)
+            
+            if response.full_text_annotation:
+                return response.full_text_annotation.text
+            return ""
+        except GoogleAPICallError as e:
+            print(f"Google Vision APIエラー: {str(e)}")
+            return ""
+        except Exception as e:
+            print(f"OCR処理エラー: {str(e)}")
+            return ""
 
-# シングルトンインスタンス
-ocr_service = OCRService()
+class PaddleOCRService(BaseOCRService):
+    """PaddleOCRを使用したOCRサービス"""
+    
+    def __init__(self):
+        super().__init__()
+        self._ocr = None
+    
+    @property
+    def ocr(self):
+        """PaddleOCRインスタンスを取得（遅延初期化）"""
+        if self._ocr is None:
+            from paddleocr import PaddleOCR
+            self._ocr = PaddleOCR(use_angle_cls=True, lang=settings.OCR_LANGUAGE)
+        return self._ocr
+    
+    def process_image(self, image_path: str) -> str:
+        """PaddleOCRで画像からテキストを抽出"""
+        try:
+            img = PILImage.open(image_path)
+            result = self.ocr.ocr(image_path, cls=True)
+            
+            extracted_text = ""
+            if result:
+                for line in result:
+                    for word_info in line:
+                        if len(word_info) >= 2:
+                            text = word_info[1][0]
+                            text = text.encode('utf-8', errors='ignore').decode('utf-8')
+                            extracted_text += text + " "
+                    extracted_text += "\n"
+            
+            return extracted_text.strip()
+        except Exception as e:
+            print(f"OCR処理エラー: {str(e)}")
+            return ""
+
+# 使用可能なOCRサービスを選択
+if HAS_GOOGLE_VISION and os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
+    ocr_service = GoogleVisionOCRService()
+else:
+    ocr_service = PaddleOCRService()
