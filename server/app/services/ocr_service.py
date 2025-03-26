@@ -84,6 +84,8 @@ class GoogleVisionOCRService(BaseOCRService):
     def client(self):
         """Google Visionクライアントを取得（遅延初期化）"""
         if self._client is None:
+            if settings.GOOGLE_APPLICATION_CREDENTIALS:
+                os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = settings.GOOGLE_APPLICATION_CREDENTIALS
             self._client = vision.ImageAnnotatorClient()
         return self._client
     
@@ -146,7 +148,11 @@ class PaddleOCRService(BaseOCRService):
             return ""
 
 # 使用可能なOCRサービスを選択
-if HAS_GOOGLE_VISION and os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
+if HAS_GOOGLE_VISION and settings.GOOGLE_APPLICATION_CREDENTIALS:
+    print(f"Google Vision API start (credentials: {settings.GOOGLE_APPLICATION_CREDENTIALS})", file=sys.stderr)
+    sys.stderr.flush()
     ocr_service = GoogleVisionOCRService()
 else:
+    print(f"PaddleOCRService start (Google credentials: {settings.GOOGLE_APPLICATION_CREDENTIALS})", file=sys.stderr)
+    sys.stderr.flush()
     ocr_service = PaddleOCRService()
