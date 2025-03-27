@@ -5,12 +5,9 @@ const Header = () => {
     <header className="bg-primary text-primary-foreground shadow-md">
       <div className="container mx-auto px-4 py-4">
         <div className="flex justify-between items-center">
-          <Link to="/" className="text-2xl font-bold">書籍画像要約サービス</Link>
+          <Link to="/upload" className="text-2xl font-bold">書籍画像要約サービス</Link>
           <nav>
             <ul className="flex space-x-6">
-              <li>
-                <Link to="/" className="hover:underline">ホーム</Link>
-              </li>
               <li>
                 <Link to="/upload" className="hover:underline">アップロード</Link>
               </li>

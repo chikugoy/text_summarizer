@@ -1,11 +1,10 @@
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from '@/components/ui/toaster';
 
 // レイアウト
 import MainLayout from '@/components/templates/MainLayout';
 
 // ページ
-import HomePage from '@/components/pages/HomePage';
 import UploadPage from '@/components/pages/UploadPage';
 import SummaryResultPage from '@/components/pages/SummaryResultPage';
 import SummaryListPage from '@/components/pages/SummaryListPage';
@@ -17,7 +16,7 @@ function App() {
     <>
       <Routes>
         <Route path="/" element={<MainLayout />}>
-          <Route index element={<HomePage />} />
+          <Route index element={<Navigate to="/upload" replace />} />
           <Route path="upload" element={<UploadPage />} />
           <Route path="result/:jobId" element={<SummaryResultPage />} />
           <Route path="summaries" element={<SummaryListPage />} />
