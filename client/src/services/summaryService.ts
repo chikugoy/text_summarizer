@@ -42,7 +42,7 @@ export interface SummaryUpdate {
  * @returns 作成された要約
  */
 export const createSummary = async (summary: SummaryCreate): Promise<SummaryDetail> => {
-  const response = await api.post<SummaryDetail>('', summary);
+  const response = await api.post<SummaryDetail>('/summaries', summary);
   return response.data;
 };
 
@@ -80,7 +80,7 @@ export const generateSummary = async (summaryId: string): Promise<SummaryDetail>
  */
 export const getSummaries = async (page = 1, pageSize = 10): Promise<SummaryList> => {
   const skip = (page - 1) * pageSize;
-  const response = await api.get<SummaryList>('', {
+  const response = await api.get<SummaryList>('/summaries', {
     params: {
       skip,
       limit: pageSize,
@@ -95,7 +95,7 @@ export const getSummaries = async (page = 1, pageSize = 10): Promise<SummaryList
  * @returns 要約詳細
  */
 export const getSummaryDetail = async (summaryId: string): Promise<SummaryDetail> => {
-  const response = await api.get<SummaryDetail>(`/${summaryId}`);
+  const response = await api.get<SummaryDetail>(`/summaries/${summaryId}`);
   return response.data;
 };
 
@@ -109,7 +109,7 @@ export const updateSummary = async (
   summaryId: string,
   update: SummaryUpdate
 ): Promise<SummaryDetail> => {
-  const response = await api.put<SummaryDetail>(`/${summaryId}`, update);
+  const response = await api.put<SummaryDetail>(`/summaries/${summaryId}`, update);
   return response.data;
 };
 
@@ -118,5 +118,5 @@ export const updateSummary = async (
  * @param summaryId 削除する要約ID
  */
 export const deleteSummary = async (summaryId: string): Promise<void> => {
-  await api.delete(`/${summaryId}`);
+  await api.delete(`/summaries/${summaryId}`);
 };

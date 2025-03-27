@@ -198,8 +198,10 @@ def get_summaries(
     db: Session = Depends(get_db)
 ):
     """要約一覧を取得する（ページネーション付き）"""
-    total = db.query(Summary).count()
-    summaries = db.query(Summary).order_by(Summary.created_at.desc()).offset(skip).limit(limit).all()
+    # 説明(description)がNULLでない要約のみ取得
+    total = db.query(Summary).filter(Summary.description.isnot(None)).count()
+    summaries = db.query(Summary).filter(Summary.description.isnot(None)) \
+        .order_by(Summary.created_at.desc()).offset(skip).limit(limit).all()
     
     return {
         "items": summaries,
