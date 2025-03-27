@@ -27,7 +27,7 @@ class SummaryService:
             self.llm = None
             print("警告: OPENAI_API_KEYが設定されていません。要約機能は利用できません。")
     
-    def summarize_text(self, text: str, max_length: int = 2000) -> str:
+    def summarize_text(self, text: str, max_length: int = 20000) -> str:
         """テキストを要約する"""
         if not self.llm:
             return "要約エンジンが初期化されていません。環境変数OPENAI_API_KEYを設定してください。"
@@ -44,13 +44,62 @@ class SummaryService:
         try:
             # テキストが長すぎる場合は分割
             if len(text) > max_length:
-                chunks = self._split_text(text, max_length)
-                docs = [Document(page_content=chunk) for chunk in chunks]
-                chain = load_summarize_chain(self.llm, chain_type="map_reduce")
-                response = chain.run(docs)
-                summary = response.content if hasattr(response, 'content') else str(response)
+                # 段落ごとにテキストを分割
+                paragraphs = [p for p in text.split('\n\n') if p.strip()]
+                chunks = []
+                current_chunk = ""
+                
+                for para in paragraphs:
+                    if len(current_chunk) + len(para) + 2 <= max_length:
+                        current_chunk += para + "\n\n"
+                    else:
+                        if current_chunk:
+                            chunks.append(current_chunk.strip())
+                        current_chunk = para + "\n\n"
+                
+                if current_chunk:
+                    chunks.append(current_chunk.strip())
+
+                # 各チャンクを個別に要約
+                summaries = []
+                for chunk in chunks:
+                    try:
+                        chunk_prompt = f"""
+                        以下のテキストの要点を簡潔にまとめてください:
+                        
+                        {chunk}
+                        
+                        要点:
+                        """
+                        chunk_response = self.llm(chunk_prompt)
+                        chunk_summary = str(chunk_response)
+                        summaries.append(chunk_summary)
+                    except Exception as e:
+                        print(f"チャンク要約エラー: {str(e)}")
+                        summaries.append(f"要約エラー: {str(e)}")
+                
+                # 要約を結合
+                if summaries:
+                    combined_summaries = "\n\n".join(summaries)
+                    
+                    # 結合した要約をさらに要約
+                    final_prompt = f"""
+                    以下の複数の要約を統合して、全体の要約を作成してください:
+                    
+                    {combined_summaries}
+                    
+                    統合された要約:
+                    """
+                    
+                    try:
+                        final_response = self.llm(final_prompt)
+                        summary = str(final_response)
+                    except Exception as e:
+                        print(f"最終要約エラー: {str(e)}")
+                        summary = combined_summaries
+                else:
+                    summary = "要約処理中にエラーが発生しました。テキストが長すぎるか、形式が不適切です。"
             else:
-                print("STEP1")
                 # 短いテキストの場合は直接要約
                 prompt = f"""
                 以下のテキストを要約してください。要点を簡潔にまとめ、重要な情報を保持してください。
@@ -60,13 +109,10 @@ class SummaryService:
 
                 要約:
                 """
-                print(prompt)
                 response = self.llm(prompt)
-                print("STEP2")
-                summary = response.content if hasattr(response, 'content') else str(response)
-                print("STEP3")
+                summary = str(response)  # 常に文字列に変換
             
-            return summary.strip() if isinstance(summary, str) else summary
+            return summary.strip() if isinstance(summary, str) else str(summary)
         except Exception as e:
             print(f"要約処理エラー: {str(e)}")
             return f"要約処理中にエラーが発生しました: {str(e)}"
@@ -91,6 +137,31 @@ class SummaryService:
             chunks.append(" ".join(current_chunk))
         
         return chunks
+
+    def _create_map_prompt(self):
+        from langchain.prompts import PromptTemplate
+        return PromptTemplate(
+            template="""以下のテキストの要点を簡潔にまとめてください:
+            
+            {text}
+            
+            要点:
+            """,
+            input_variables=["text"]
+        )
+
+    def _create_combine_prompt(self):
+        from langchain.prompts import PromptTemplate
+        return PromptTemplate(
+            template="""以下の複数の要約を統合して、全体の要約を作成してください:
+            
+            {text}
+            
+            統合された要約:
+            """,
+            input_variables=["text"]
+        )
+    
 
 
 # シングルトンインスタンス
