@@ -10,11 +10,12 @@ services:
     restart: always
     ports:
       - "8000:8000"
+    env_file:
+      - ./server/.env
     environment:
       APP_NAME: TextSummarizer
       DEBUG: "true"
       UVICORN_LOG_LEVEL: debug
-      SECRET_KEY: 09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7
       ALLOWED_HOSTS: '["localhost", "127.0.0.1"]'
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/text_summarizer_db
       UPLOAD_DIR: ./uploads
