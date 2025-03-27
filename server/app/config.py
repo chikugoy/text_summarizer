@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     
     # AI設定
     OPENAI_API_KEY: Optional[str] = None
-    AI_MODEL: str = "gpt-3.5-turbo"
+    AI_MODEL: str = "gpt-4o"
     
     @validator("UPLOAD_DIR")
     def create_upload_dir(cls, v):
