@@ -30,19 +30,35 @@ const SummaryListPage = () => {
     summarizedText: string;
   };
 
-  const [summaries, setSummaries] = useState<SummaryItem[]>([]);
+  const [allSummaries, setAllSummaries] = useState<SummaryItem[]>([]);
+  const [displayedSummaries, setDisplayedSummaries] = useState<SummaryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
 
+  // 全要約データを取得
   useEffect(() => {
-    const fetchSummaries = async () => {
+    const fetchAllSummaries = async () => {
       try {
-        const response = await getSummaries(page, 10);
+        // まず全件数を取得
+        const countResponse = await getSummaries(1, 1);
+        const totalCount = countResponse.total;
+        setTotalItems(totalCount);
+
+        // 全データを取得
+        const allPages = Math.ceil(totalCount / 100);
+        const fetchPromises = [];
         
+        for (let p = 1; p <= allPages; p++) {
+          fetchPromises.push(getSummaries(p, 100));
+        }
+
+        const allResponses = await Promise.all(fetchPromises);
+        const allItems = allResponses.flatMap(r => r.items);
+
         // 各要約の詳細情報を取得
-        const detailPromises = response.items.map(async (item) => {
+        const detailPromises = allItems.map(async (item) => {
           try {
             const detail = await getSummaryDetail(item.id);
             return {
@@ -63,10 +79,9 @@ const SummaryListPage = () => {
             };
           }
         });
-        
+
         const formattedSummaries = await Promise.all(detailPromises);
-        setSummaries(formattedSummaries);
-        setTotalItems(response.total);
+        setAllSummaries(formattedSummaries);
       } catch (error) {
         console.error('Failed to fetch summaries:', error);
       } finally {
@@ -74,14 +89,26 @@ const SummaryListPage = () => {
       }
     };
 
-    fetchSummaries();
-  }, [page]);
+    fetchAllSummaries();
+  }, []);
 
-  const filteredSummaries = summaries.filter(summary => 
-    summary.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (summary.description && summary.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    summary.summarizedText.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // 検索とページネーションを適用
+  useEffect(() => {
+    const filtered = allSummaries.filter(summary =>
+      summary.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (summary.description && summary.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      summary.summarizedText.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    setTotalItems(filtered.length);
+    
+    // ページネーション適用
+    const start = (page - 1) * 10;
+    const end = start + 10;
+    setDisplayedSummaries(filtered.slice(start, end));
+  }, [allSummaries, searchTerm, page]);
+
+  const filteredSummaries = displayedSummaries;
 
   return (
     <div className="space-y-8">
@@ -159,6 +186,27 @@ const SummaryListPage = () => {
                 </div>
               </Link>
             ))}
+          </div>
+          
+          {/* ページネーションコントロール */}
+          <div className="flex justify-center items-center gap-4 mt-8">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="px-4 py-2 border rounded-md disabled:opacity-50"
+            >
+              前へ
+            </button>
+            <span className="text-sm">
+              {page} / {Math.ceil(totalItems / 10)}
+            </span>
+            <button
+              onClick={() => setPage(p => p + 1)}
+              disabled={page >= Math.ceil(totalItems / 10)}
+              className="px-4 py-2 border rounded-md disabled:opacity-50"
+            >
+              次へ
+            </button>
           </div>
         </div>
       )}

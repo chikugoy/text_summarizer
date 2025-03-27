@@ -1,6 +1,7 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 import uuid
 import logging
 import sys
@@ -198,9 +199,16 @@ def get_summaries(
     db: Session = Depends(get_db)
 ):
     """要約一覧を取得する（ページネーション付き）"""
-    # 説明(description)がNULLでない要約のみ取得
-    total = db.query(Summary).filter(Summary.description.isnot(None)).count()
-    summaries = db.query(Summary).filter(Summary.description.isnot(None)) \
+    # 説明(description)がNULLでなく、かつタイトルが「一時的な要約」でない要約のみ取得
+    # 大文字小文字を区別しない比較のためにlower()を使用
+    total = db.query(Summary).filter(
+        Summary.description.isnot(None),
+        func.lower(Summary.title) != "一時的な要約"
+    ).count()
+    summaries = db.query(Summary).filter(
+        Summary.description.isnot(None),
+        func.lower(Summary.title) != "一時的な要約"
+    ) \
         .order_by(Summary.created_at.desc()).offset(skip).limit(limit).all()
     
     return {
