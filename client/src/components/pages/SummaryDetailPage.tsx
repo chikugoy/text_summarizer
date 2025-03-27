@@ -1,45 +1,34 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Calendar, Clock, Clipboard, Trash2, Edit } from 'lucide-react';
+import { ArrowLeft, Calendar, Clipboard, Trash2, Edit } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
-import { getSummaryDetail, deleteSummary, updateSummary, SummaryDetail } from '@/services';
+import { getSummaryDetail, deleteSummary, updateSummary } from '@/services/summaryService';
+import type { SummaryDetail, SummaryUpdate } from '@/services/summaryService';
+import { formatDateTime } from '@/lib/utils';
+import EditSummaryModal from './EditSummaryModal';
+import DeleteConfirmModal from './DeleteConfirmModal';
 
-const formatDate = (dateString: string): string => {
-  const date = new Date(dateString);
-  return new Intl.DateTimeFormat('ja-JP', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  }).format(date);
-};
+interface SummaryViewState {
+  loading: boolean;
+  error: string | null;
+  showOriginalText: boolean;
+  isDeleting: boolean;
+}
 
 const SummaryDetailPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   
-  // 要約データの型定義
-  type FormattedSummary = {
-    id: string;
-    title: string;
-    description: string | null;
-    originalText: string;
-    summarizedText: string;
-    createdAt: string;
-  };
-  
-  const [summary, setSummary] = useState<FormattedSummary | null>(null);
-  
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [showOriginalText, setShowOriginalText] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editForm, setEditForm] = useState({
-    title: '',
-    description: undefined as string | undefined
+  const [summary, setSummary] = useState<SummaryDetail | null>(null);
+  const [viewState, setViewState] = useState<SummaryViewState>({
+    loading: true,
+    error: null,
+    showOriginalText: false,
+    isDeleting: false
+  });
+  const [modalState, setModalState] = useState({
+    edit: false,
+    delete: false
   });
 
   useEffect(() => {
@@ -48,23 +37,15 @@ const SummaryDetailPage = () => {
       
       try {
         const data = await getSummaryDetail(id);
-        
-        // APIレスポンスを適切な形式に変換
-        const formattedSummary: FormattedSummary = {
-          id: data.id,
-          title: data.title,
-          description: data.description,
-          originalText: data.original_text,
-          summarizedText: data.summarized_text,
-          createdAt: data.created_at
-        };
-        
-        setSummary(formattedSummary);
+        setSummary(data);
+        setViewState(prev => ({ ...prev, loading: false }));
       } catch (err) {
         console.error('Failed to fetch summary detail:', err);
-        setError('要約の取得中にエラーが発生しました');
-      } finally {
-        setLoading(false);
+        setViewState(prev => ({
+          ...prev,
+          loading: false,
+          error: '要約の取得中にエラーが発生しました'
+        }));
       }
     };
 
@@ -74,7 +55,7 @@ const SummaryDetailPage = () => {
   const handleCopyToClipboard = () => {
     if (!summary) return;
     
-    navigator.clipboard.writeText(summary.summarizedText)
+    navigator.clipboard.writeText(summary.summarized_text)
       .then(() => {
         toast({
           title: 'クリップボードにコピーしました',
@@ -91,12 +72,10 @@ const SummaryDetailPage = () => {
   const handleDelete = async () => {
     if (!summary || !id) return;
     
-    setIsDeleting(true);
+    setViewState(prev => ({ ...prev, isDeleting: true }));
     
     try {
-      // 要約を削除
       await deleteSummary(id);
-      
       toast({
         title: '要約を削除しました',
       });
@@ -107,12 +86,31 @@ const SummaryDetailPage = () => {
         title: '削除に失敗しました',
         variant: 'destructive',
       });
-      setIsDeleting(false);
-      setShowDeleteConfirm(false);
+      setViewState(prev => ({ ...prev, isDeleting: false }));
+      setModalState(prev => ({ ...prev, delete: false }));
     }
   };
 
-  if (loading) {
+  const handleUpdate = async (updateData: SummaryUpdate) => {
+    if (!summary || !id) return;
+    
+    try {
+      const updated = await updateSummary(id, updateData);
+      setSummary(updated);
+      setModalState(prev => ({ ...prev, edit: false }));
+      toast({
+        title: '要約を更新しました',
+      });
+    } catch (error) {
+      console.error('Update summary error:', error);
+      toast({
+        title: '更新に失敗しました',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  if (viewState.loading) {
     return (
       <div className="text-center py-12">
         <p className="text-muted-foreground">読み込み中...</p>
@@ -120,11 +118,11 @@ const SummaryDetailPage = () => {
     );
   }
 
-  if (error || !summary) {
+  if (viewState.error || !summary) {
     return (
       <div className="text-center py-12">
         <h2 className="text-xl font-semibold text-destructive mb-4">エラーが発生しました</h2>
-        <p className="text-muted-foreground mb-6">{error || '要約が見つかりませんでした'}</p>
+        <p className="text-muted-foreground mb-6">{viewState.error || '要約が見つかりませんでした'}</p>
         <Link
           to="/summaries"
           className="inline-flex items-center text-primary hover:underline"
@@ -156,20 +154,14 @@ const SummaryDetailPage = () => {
             コピー
           </button>
           <button
-            onClick={() => {
-              setIsEditing(true);
-              setEditForm({
-                title: summary.title,
-                description: summary.description ?? undefined
-              });
-            }}
+            onClick={() => setModalState(prev => ({ ...prev, edit: true }))}
             className="inline-flex items-center text-sm bg-primary text-primary-foreground px-3 py-1.5 rounded-md hover:bg-primary/90"
           >
             <Edit className="h-4 w-4 mr-1" />
             編集
           </button>
           <button
-            onClick={() => setShowDeleteConfirm(true)}
+            onClick={() => setModalState(prev => ({ ...prev, delete: true }))}
             className="inline-flex items-center text-sm bg-destructive text-destructive-foreground px-3 py-1.5 rounded-md hover:bg-destructive/90"
           >
             <Trash2 className="h-4 w-4 mr-1" />
@@ -186,7 +178,7 @@ const SummaryDetailPage = () => {
         <div className="flex items-center space-x-4 text-sm text-muted-foreground mb-6">
           <span className="flex items-center">
             <Calendar className="h-4 w-4 mr-1" />
-            {formatDate(summary.createdAt)}
+            {formatDateTime(summary.created_at)}
           </span>
         </div>
       </div>
@@ -195,126 +187,46 @@ const SummaryDetailPage = () => {
         <div>
           <h2 className="text-xl font-semibold mb-4">要約テキスト</h2>
           <div className="bg-card text-card-foreground p-4 rounded-md shadow-sm whitespace-pre-line">
-            {summary.summarizedText}
+            {summary.summarized_text}
           </div>
         </div>
 
         <div>
           <button
-            onClick={() => setShowOriginalText(!showOriginalText)}
+            onClick={() => setViewState(prev => ({
+              ...prev,
+              showOriginalText: !prev.showOriginalText
+            }))}
             className="text-sm text-muted-foreground hover:text-foreground"
           >
-            {showOriginalText ? '元のテキストを隠す' : '元のテキストを表示'}
+            {viewState.showOriginalText ? '元のテキストを隠す' : '元のテキストを表示'}
           </button>
           
-          {showOriginalText && (
+          {viewState.showOriginalText && (
             <div className="mt-4">
               <h3 className="text-lg font-medium mb-2">元のテキスト</h3>
               <div className="bg-muted p-4 rounded-md whitespace-pre-line text-sm">
-                {summary.originalText}
+                {summary.original_text}
               </div>
             </div>
           )}
         </div>
       </div>
 
-      {isEditing && (
-        <div className="fixed inset-0 bg-background/80 flex items-center justify-center z-50">
-          <div className="bg-card border rounded-md p-6 max-w-md w-full space-y-4 shadow-lg">
-            <h3 className="text-lg font-semibold">要約を編集</h3>
-            
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="edit-title" className="block text-sm font-medium mb-1">
-                  タイトル
-                </label>
-                <input
-                  id="edit-title"
-                  type="text"
-                  value={editForm.title}
-                  onChange={(e) => setEditForm({...editForm, title: e.target.value})}
-                  className="w-full px-3 py-2 border rounded-md"
-                />
-              </div>
-              
-              <div>
-                <label htmlFor="edit-description" className="block text-sm font-medium mb-1">
-                  説明
-                </label>
-                <textarea
-                  id="edit-description"
-                  value={editForm.description}
-                  onChange={(e) => setEditForm({...editForm, description: e.target.value})}
-                  className="w-full px-3 py-2 border rounded-md min-h-[100px]"
-                />
-              </div>
-            </div>
-            
-            <div className="flex justify-end space-x-2">
-              <button
-                onClick={() => setIsEditing(false)}
-                className="px-4 py-2 border rounded-md text-sm"
-              >
-                キャンセル
-              </button>
-              <button
-                onClick={async () => {
-                  try {
-                    const updated = await updateSummary(summary.id, {
-                      title: editForm.title,
-                      description: editForm.description
-                    });
-                    setSummary({
-                      ...summary,
-                      title: updated.title,
-                      description: updated.description
-                    });
-                    setIsEditing(false);
-                    toast({
-                      title: '要約を更新しました',
-                    });
-                  } catch (error) {
-                    console.error('Update summary error:', error);
-                    toast({
-                      title: '更新に失敗しました',
-                      variant: 'destructive',
-                    });
-                  }
-                }}
-                className="bg-primary text-primary-foreground px-4 py-2 rounded-md text-sm"
-              >
-                保存
-              </button>
-            </div>
-          </div>
-        </div>
+      {modalState.edit && summary && (
+        <EditSummaryModal
+          summary={summary}
+          onClose={() => setModalState(prev => ({ ...prev, edit: false }))}
+          onSave={handleUpdate}
+        />
       )}
 
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-background/80 flex items-center justify-center z-50">
-          <div className="bg-card border rounded-md p-6 max-w-md w-full space-y-4 shadow-lg">
-            <h3 className="text-lg font-semibold">要約を削除しますか？</h3>
-            <p className="text-muted-foreground">
-              この操作は元に戻せません。本当に「{summary.title}」を削除しますか？
-            </p>
-            <div className="flex justify-end space-x-2">
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
-                className="px-4 py-2 border rounded-md text-sm"
-                disabled={isDeleting}
-              >
-                キャンセル
-              </button>
-              <button
-                onClick={handleDelete}
-                disabled={isDeleting}
-                className="bg-destructive text-destructive-foreground px-4 py-2 rounded-md text-sm disabled:opacity-50"
-              >
-                {isDeleting ? '削除中...' : '削除する'}
-              </button>
-            </div>
-          </div>
-        </div>
+      {modalState.delete && summary && (
+        <DeleteConfirmModal
+          summaryTitle={summary.title}
+          onClose={() => setModalState(prev => ({ ...prev, delete: false }))}
+          onConfirm={handleDelete}
+        />
       )}
     </div>
   );

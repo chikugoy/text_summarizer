@@ -32,7 +32,7 @@ export interface SummaryCreate {
 }
 
 export interface SummaryUpdate {
-  title?: string;
+  title: string;
   description?: string;
 }
 
