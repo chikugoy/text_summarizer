@@ -51,8 +51,6 @@ export const createSummary = async (summary: SummaryCreate): Promise<SummaryDeta
  * @param summaryId 要約ID
  * @returns 生成された要約
  */
-let isGenerating = false;
-
 export const generateSummary = async (summaryId: string): Promise<SummaryDetail> => {
   console.log(`generateSummary 呼び出し: summaryId=${summaryId}, type=${typeof summaryId}`);
   
@@ -63,12 +61,7 @@ export const generateSummary = async (summaryId: string): Promise<SummaryDetail>
     throw new Error('Invalid summary ID format');
   }
 
-  if (isGenerating) {
-    throw new Error('Another summary generation is already in progress');
-  }
-
   try {
-    isGenerating = true;
     const response = await api.post<SummaryDetail>(`/summaries/generate`, {
       summary_id: summaryId
     });
@@ -76,8 +69,6 @@ export const generateSummary = async (summaryId: string): Promise<SummaryDetail>
   } catch (error) {
     console.error('要約生成エラー:', error);
     throw error;
-  } finally {
-    isGenerating = false;
   }
 };
 
