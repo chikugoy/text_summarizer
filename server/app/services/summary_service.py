@@ -16,6 +16,7 @@ class SummaryService:
         if settings.OPENAI_API_KEY:
             print(f"DEBUG: OpenAI APIキーが設定されています (長さ: {len(settings.OPENAI_API_KEY)})")
             os.environ["OPENAI_API_KEY"] = settings.OPENAI_API_KEY
+            os.environ["AI_MODEL"] = settings.AI_MODEL
             try:
                 self.llm = ChatOpenAI(temperature=0, model_name=settings.AI_MODEL)
                 print("DEBUG: LLMが正常に初期化されました")

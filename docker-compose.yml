@@ -20,7 +20,6 @@ services:
       UPLOAD_DIR: ./uploads
       MAX_UPLOAD_SIZE: "10485760"
       OCR_LANGUAGE: japan
-      OPENAI_API_KEY: "sk-dummy-key-for-development"
       AI_MODEL: gpt-3.5-turbo
     volumes:
       - ./server:/app
