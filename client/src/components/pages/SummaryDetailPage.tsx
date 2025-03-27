@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Calendar, Clock, Clipboard, Trash2, Edit } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
-import { getSummaryDetail, deleteSummary, SummaryDetail } from '@/services';
+import { getSummaryDetail, deleteSummary, updateSummary, SummaryDetail } from '@/services';
 
 const formatDate = (dateString: string): string => {
   const date = new Date(dateString);
@@ -36,6 +36,11 @@ const SummaryDetailPage = () => {
   const [showOriginalText, setShowOriginalText] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState({
+    title: '',
+    description: undefined as string | undefined
+  });
 
   useEffect(() => {
     const fetchSummaryDetail = async () => {
@@ -151,6 +156,19 @@ const SummaryDetailPage = () => {
             コピー
           </button>
           <button
+            onClick={() => {
+              setIsEditing(true);
+              setEditForm({
+                title: summary.title,
+                description: summary.description ?? undefined
+              });
+            }}
+            className="inline-flex items-center text-sm bg-primary text-primary-foreground px-3 py-1.5 rounded-md hover:bg-primary/90"
+          >
+            <Edit className="h-4 w-4 mr-1" />
+            編集
+          </button>
+          <button
             onClick={() => setShowDeleteConfirm(true)}
             className="inline-flex items-center text-sm bg-destructive text-destructive-foreground px-3 py-1.5 rounded-md hover:bg-destructive/90"
           >
@@ -199,6 +217,78 @@ const SummaryDetailPage = () => {
           )}
         </div>
       </div>
+
+      {isEditing && (
+        <div className="fixed inset-0 bg-background/80 flex items-center justify-center z-50">
+          <div className="bg-card border rounded-md p-6 max-w-md w-full space-y-4 shadow-lg">
+            <h3 className="text-lg font-semibold">要約を編集</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="edit-title" className="block text-sm font-medium mb-1">
+                  タイトル
+                </label>
+                <input
+                  id="edit-title"
+                  type="text"
+                  value={editForm.title}
+                  onChange={(e) => setEditForm({...editForm, title: e.target.value})}
+                  className="w-full px-3 py-2 border rounded-md"
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="edit-description" className="block text-sm font-medium mb-1">
+                  説明
+                </label>
+                <textarea
+                  id="edit-description"
+                  value={editForm.description}
+                  onChange={(e) => setEditForm({...editForm, description: e.target.value})}
+                  className="w-full px-3 py-2 border rounded-md min-h-[100px]"
+                />
+              </div>
+            </div>
+            
+            <div className="flex justify-end space-x-2">
+              <button
+                onClick={() => setIsEditing(false)}
+                className="px-4 py-2 border rounded-md text-sm"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    const updated = await updateSummary(summary.id, {
+                      title: editForm.title,
+                      description: editForm.description
+                    });
+                    setSummary({
+                      ...summary,
+                      title: updated.title,
+                      description: updated.description
+                    });
+                    setIsEditing(false);
+                    toast({
+                      title: '要約を更新しました',
+                    });
+                  } catch (error) {
+                    console.error('Update summary error:', error);
+                    toast({
+                      title: '更新に失敗しました',
+                      variant: 'destructive',
+                    });
+                  }
+                }}
+                className="bg-primary text-primary-foreground px-4 py-2 rounded-md text-sm"
+              >
+                保存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-background/80 flex items-center justify-center z-50">
