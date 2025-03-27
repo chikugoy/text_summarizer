@@ -1,8 +1,38 @@
 from typing import List, Dict, Any, Optional
-import os
+import logging
+from openai import OpenAI
 
 from app.config import settings
 
+# ロガーの設定
+logger = logging.getLogger(__name__)
+
+# プロンプトテンプレート
+SYSTEM_PROMPT = "あなたは優秀な要約者です。"
+CHUNK_PROMPT_TEMPLATE = """
+以下のテキストの要点を簡潔にまとめてください:
+
+{text}
+
+要点:
+"""
+
+COMBINE_PROMPT_TEMPLATE = """
+以下の複数の要約を統合して、全体の要約を作成してください:
+
+{summaries}
+
+統合された要約:
+"""
+
+DIRECT_SUMMARY_TEMPLATE = """
+以下のテキストを要約してください。要点を簡潔にまとめ、重要な情報を保持してください。
+
+テキスト:
+{text}
+
+要約:
+"""
 
 class SummaryService:
     """テキスト要約サービス"""
@@ -11,14 +41,16 @@ class SummaryService:
         """初期化"""
         # APIキーの設定を確認
         if settings.OPENAI_API_KEY:
-            print(f"DEBUG: OpenAI APIキーが設定されています (長さ: {len(settings.OPENAI_API_KEY)})")
+            logger.info(f"OpenAI APIキーが設定されています (長さ: {len(settings.OPENAI_API_KEY)})")
             self.api_key = settings.OPENAI_API_KEY
             self.model = settings.AI_MODEL
-            print(f"DEBUG: モデル: {self.model}")
+            self.client = OpenAI(api_key=self.api_key)
+            logger.info(f"使用モデル: {self.model}")
         else:
             self.api_key = None
             self.model = None
-            print("警告: OPENAI_API_KEYが設定されていません。要約機能は利用できません。")
+            self.client = None
+            logger.warning("OPENAI_API_KEYが設定されていません。要約機能は利用できません。")
     
     def summarize_text(self, text: str, max_length: int = 20000) -> str:
         """テキストを要約する"""
@@ -32,148 +64,118 @@ class SummaryService:
         try:
             text = text.encode('utf-8', errors='ignore').decode('utf-8')
         except Exception as e:
-            print(f"テキストエンコーディング処理エラー: {str(e)}")
+            logger.error(f"テキストエンコーディング処理エラー: {str(e)}")
+            return f"テキスト処理中にエラーが発生しました: {str(e)}"
         
         try:
-            print(f"len(text): {len(text)}")
-            print(f"text: {text}")
-
-            # テキストが長すぎる場合は分割
-            if len(text) > max_length:
-                print(f"step1-1")
-    
-                # 段落ごとにテキストを分割
-                paragraphs = [p for p in text.split('\n\n') if p.strip()]
-                chunks = []
-                current_chunk = ""
-                
-                for para in paragraphs:
-                    if len(current_chunk) + len(para) + 2 <= max_length:
-                        current_chunk += para + "\n\n"
-                    else:
-                        if current_chunk:
-                            chunks.append(current_chunk.strip())
-                        current_chunk = para + "\n\n"
-                
-                if current_chunk:
-                    chunks.append(current_chunk.strip())
-
-                # 各チャンクを個別に要約
-                summaries = []
-                for i, chunk in enumerate(chunks):
-                    try:
-                        print(f"チャンク {i+1}/{len(chunks)} を要約中...")
-                        chunk_prompt = f"""
-                        以下のテキストの要点を簡潔にまとめてください:
-                        
-                        {chunk}
-                        
-                        要点:
-                        """
-                        
-                        # 直接APIを呼び出す
-                        from openai import OpenAI
-                        client = OpenAI(api_key=self.api_key)
-                        response = client.chat.completions.create(
-                            model=self.model,
-                            messages=[
-                                {"role": "system", "content": "あなたは優秀な要約者です。"},
-                                {"role": "user", "content": chunk_prompt}
-                            ],
-                            temperature=0.3,
-                        )
-                        chunk_summary = response.choices[0].message.content
-                        summaries.append(chunk_summary)
-                        print(f"チャンク {i+1} の要約が完了しました")
-                    except Exception as e:
-                        error_msg = f"チャンク {i+1} の要約中にエラーが発生しました: {str(e)}"
-                        print(error_msg)
-                        summaries.append(f"要約エラー: {str(e)}")
-                
-                # 要約を結合
-                if summaries:
-                    if len(summaries) == 1:
-                        return summaries[0]
-                    
-                    combined_summaries = "\n\n".join(summaries)
-                    
-                    # 結合した要約が短い場合はそのまま返す
-                    if len(combined_summaries) < 4000:
-                        return combined_summaries
-                    
-                    # 結合した要約をさらに要約
-                    try:
-                        print("最終要約を生成中...")
-                        final_prompt = f"""
-                        以下の複数の要約を統合して、全体の要約を作成してください:
-                        
-                        {combined_summaries}
-                        
-                        統合された要約:
-                        """
-                        
-                        # 直接APIを呼び出す
-                        from openai import OpenAI
-                        client = OpenAI(api_key=self.api_key)
-                        response = client.chat.completions.create(
-                            model=self.model,
-                            messages=[
-                                {"role": "system", "content": "あなたは優秀な要約者です。"},
-                                {"role": "user", "content": final_prompt}
-                            ],
-                            temperature=0.3,
-                        )
-                        final_summary = response.choices[0].message.content
-                        print("最終要約が完了しました")
-                        return final_summary
-                    except Exception as e:
-                        error_msg = f"最終要約中にエラーが発生しました: {str(e)}"
-                        print(error_msg)
-                        # エラーが発生した場合は結合した要約をそのまま返す
-                        return combined_summaries
-                else:
-                    return "要約処理中にエラーが発生しました。テキストが長すぎるか、形式が不適切です。"
-            else:
-                print(f"step2-1")
-
-                # 短いテキストの場合は直接要約
-                try:
-                    print("短いテキストを直接要約中...")
-                    prompt = f"""
-                    以下のテキストを要約してください。要点を簡潔にまとめ、重要な情報を保持してください。
-
-                    テキスト:
-                    {text}
-
-                    要約:
-                    """
-                    
-                    # 直接APIを呼び出す
-                    from openai import OpenAI
-                    client = OpenAI(api_key=self.api_key)
-                    response = client.chat.completions.create(
-                        model=self.model,
-                        messages=[
-                            {"role": "system", "content": "あなたは優秀な要約者です。"},
-                            {"role": "user", "content": prompt}
-                        ],
-                        temperature=0.3,
-                    )
-                    summary = response.choices[0].message.content
-                    print("要約が完了しました")
-                    return summary
-                except Exception as e:
-                    error_msg = f"要約中にエラーが発生しました: {str(e)}"
-                    print(error_msg)
-                    return f"要約処理中にエラーが発生しました: {str(e)}"
+            logger.debug(f"テキスト長: {len(text)}")
             
-            return summary.strip() if isinstance(summary, str) else str(summary)
+            # テキストが長すぎる場合は分割して要約
+            if len(text) > max_length:
+                return self._summarize_long_text(text, max_length)
+            else:
+                # 短いテキストの場合は直接要約
+                return self._summarize_short_text(text)
+                
         except Exception as e:
-            print(f"要約処理エラー: {str(e)}")
+            logger.error(f"要約処理エラー: {str(e)}")
             return f"要約処理中にエラーが発生しました: {str(e)}"
     
-    def _split_text(self, text: str, max_length: int = 2000) -> List[str]:
-        """テキストを適切な長さに分割する"""
+    def _summarize_long_text(self, text: str, max_length: int) -> str:
+        """長いテキストを分割して要約する"""
+        logger.info("長いテキストを分割して要約します")
+        
+        # 段落ごとにテキストを分割
+        chunks = self._split_text_by_paragraphs(text, max_length)
+        
+        # 各チャンクを個別に要約
+        summaries = []
+        for i, chunk in enumerate(chunks):
+            try:
+                logger.info(f"チャンク {i+1}/{len(chunks)} を要約中...")
+                chunk_summary = self._call_openai_api(
+                    CHUNK_PROMPT_TEMPLATE.format(text=chunk)
+                )
+                summaries.append(chunk_summary)
+                logger.info(f"チャンク {i+1} の要約が完了しました")
+            except Exception as e:
+                error_msg = f"チャンク {i+1} の要約中にエラーが発生しました: {str(e)}"
+                logger.error(error_msg)
+                summaries.append(f"要約エラー: {str(e)}")
+        
+        # 要約を結合
+        if not summaries:
+            return "要約処理中にエラーが発生しました。テキストが長すぎるか、形式が不適切です。"
+            
+        if len(summaries) == 1:
+            return summaries[0]
+        
+        combined_summaries = "\n\n".join(summaries)
+        
+        # 結合した要約が短い場合はそのまま返す
+        if len(combined_summaries) < 4000:
+            return combined_summaries
+        
+        # 結合した要約をさらに要約
+        try:
+            logger.info("最終要約を生成中...")
+            final_summary = self._call_openai_api(
+                COMBINE_PROMPT_TEMPLATE.format(summaries=combined_summaries)
+            )
+            logger.info("最終要約が完了しました")
+            return final_summary
+        except Exception as e:
+            error_msg = f"最終要約中にエラーが発生しました: {str(e)}"
+            logger.error(error_msg)
+            # エラーが発生した場合は結合した要約をそのまま返す
+            return combined_summaries
+    
+    def _summarize_short_text(self, text: str) -> str:
+        """短いテキストを直接要約する"""
+        logger.info("短いテキストを直接要約します")
+        try:
+            prompt = DIRECT_SUMMARY_TEMPLATE.format(text=text)
+            summary = self._call_openai_api(prompt)
+            logger.info("要約が完了しました")
+            return summary
+        except Exception as e:
+            error_msg = f"要約中にエラーが発生しました: {str(e)}"
+            logger.error(error_msg)
+            return f"要約処理中にエラーが発生しました: {str(e)}"
+    
+    def _call_openai_api(self, prompt: str) -> str:
+        """OpenAI APIを呼び出す"""
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+        )
+        return response.choices[0].message.content
+    
+    def _split_text_by_paragraphs(self, text: str, max_length: int) -> List[str]:
+        """テキストを段落ごとに分割する"""
+        paragraphs = [p for p in text.split('\n\n') if p.strip()]
+        chunks = []
+        current_chunk = ""
+        
+        for para in paragraphs:
+            if len(current_chunk) + len(para) + 2 <= max_length:
+                current_chunk += para + "\n\n"
+            else:
+                if current_chunk:
+                    chunks.append(current_chunk.strip())
+                current_chunk = para + "\n\n"
+        
+        if current_chunk:
+            chunks.append(current_chunk.strip())
+            
+        return chunks
+    
+    def _split_text_by_words(self, text: str, max_length: int = 2000) -> List[str]:
+        """テキストを単語単位で分割する"""
         words = text.split()
         chunks = []
         current_chunk = []
@@ -192,9 +194,6 @@ class SummaryService:
             chunks.append(" ".join(current_chunk))
         
         return chunks
-
-    # 不要なメソッドを削除
-    
 
 
 # シングルトンインスタンス
