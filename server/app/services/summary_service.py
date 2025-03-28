@@ -1,6 +1,7 @@
 from typing import List, Dict, Any, Optional
 import logging
-from openai import OpenAI
+import time
+from openai import OpenAI, RateLimitError
 
 from app.config import settings
 
@@ -52,7 +53,7 @@ class SummaryService:
             self.client = None
             logger.warning("OPENAI_API_KEYが設定されていません。要約機能は利用できません。")
     
-    def summarize_text(self, text: str, max_length: int = 120000) -> str:
+    def summarize_text(self, text: str, max_length: int = 25000) -> str:
         """テキストを要約する"""
         if not self.api_key:
             return "要約エンジンが初期化されていません。環境変数OPENAI_API_KEYを設定してください。"
@@ -97,6 +98,7 @@ class SummaryService:
                     CHUNK_PROMPT_TEMPLATE.format(text=chunk)
                 )
                 summaries.append(chunk_summary)
+                time.sleep(60)
                 logger.info(f"チャンク {i+1} の要約が完了しました")
             except Exception as e:
                 error_msg = f"チャンク {i+1} の要約中にエラーが発生しました: {str(e)}"
@@ -145,15 +147,31 @@ class SummaryService:
     
     def _call_openai_api(self, prompt: str) -> str:
         """OpenAI APIを呼び出す"""
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.3,
-        )
-        return response.choices[0].message.content
+        max_retries = 3
+        retry_delay = 60  # 秒
+        
+        for attempt in range(max_retries):
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.3,
+                )
+                return response.choices[0].message.content
+                
+            except RateLimitError:
+                if attempt < max_retries - 1:
+                    logger.warning(f"Rate limit exceeded. Retrying in {retry_delay} seconds... (Attempt {attempt + 1}/{max_retries})")
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+                else:
+                    raise
+            except Exception as e:
+                logger.error(f"OpenAI API call failed: {str(e)}")
+                raise
     
     def _split_text_by_paragraphs(self, text: str, max_length: int) -> List[str]:
         """テキストを段落ごとに分割する"""
