@@ -113,24 +113,25 @@ class SummaryService:
             return summaries[0]
         
         combined_summaries = "\n\n".join(summaries)
+        return combined_summaries
         
-        # 結合した要約が短い場合はそのまま返す
-        if len(combined_summaries) < 4000:
-            return combined_summaries
+        # # 結合した要約が短い場合はそのまま返す
+        # if len(combined_summaries) < 4000:
+        #     return combined_summaries
         
-        # 結合した要約をさらに要約
-        try:
-            logger.info("最終要約を生成中...")
-            final_summary = self._call_openai_api(
-                COMBINE_PROMPT_TEMPLATE.format(summaries=combined_summaries)
-            )
-            logger.info("最終要約が完了しました")
-            return final_summary
-        except Exception as e:
-            error_msg = f"最終要約中にエラーが発生しました: {str(e)}"
-            logger.error(error_msg)
-            # エラーが発生した場合は結合した要約をそのまま返す
-            return combined_summaries
+        # # 結合した要約をさらに要約
+        # try:
+        #     logger.info("最終要約を生成中...")
+        #     final_summary = self._call_openai_api(
+        #         COMBINE_PROMPT_TEMPLATE.format(summaries=combined_summaries)
+        #     )
+        #     logger.info("最終要約が完了しました")
+        #     return final_summary
+        # except Exception as e:
+        #     error_msg = f"最終要約中にエラーが発生しました: {str(e)}"
+        #     logger.error(error_msg)
+        #     # エラーが発生した場合は結合した要約をそのまま返す
+        #     return combined_summaries
     
     def _summarize_short_text(self, text: str) -> str:
         """短いテキストを直接要約する"""

@@ -117,19 +117,6 @@ Summary <-->> Image
 - **OCR処理**: PaddleOCR
 - **要約処理**: LangChain
 
-## セキュリティ対策
-
-- CSRF対策の実装
-- 入力データの厳格なバリデーション
-- ファイルアップロードの検証と制限
-- APIレート制限
-
-## パフォーマンス最適化
-
-- 画像の最適化
-- 非同期処理によるOCRと要約タスクの実行
-- プログレッシブローディングの実装
-
 ## 開発環境構築
 
 ### 前提条件
@@ -183,14 +170,6 @@ npm run dev
 ```
 
 フロントエンドサーバーは`http://localhost:3000`で起動します。
-
-## デプロイ
-
-このプロジェクトは以下の環境にデプロイできます：
-
-- **フロントエンド & バックエンド**: [Vercel](https://vercel.com)
-- **データベース**: [PlanetScale](https://planetscale.com) / [Supabase](https://supabase.com)
-- **画像ストレージ**: [Cloudinary](https://cloudinary.com) / [AWS S3](https://aws.amazon.com/s3/)
 
 ## ライセンス
 
