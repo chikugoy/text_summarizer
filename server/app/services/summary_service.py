@@ -54,6 +54,8 @@ class SummaryService:
             logger.warning("OPENAI_API_KEYが設定されていません。要約機能は利用できません。")
     
     def summarize_text(self, text: str, max_length: int = 25000) -> str:
+        return ""
+
         """テキストを要約する"""
         if not self.api_key:
             return "要約エンジンが初期化されていません。環境変数OPENAI_API_KEYを設定してください。"
