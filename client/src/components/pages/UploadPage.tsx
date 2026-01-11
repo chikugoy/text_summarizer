@@ -4,11 +4,16 @@ import { useDropzone } from 'react-dropzone';
 import { Upload, X, Image as ImageIcon } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import { uploadImages, processOCR } from '@/services';
+import { useSummaryStore } from '@/stores';
+
+const DEFAULT_INSTRUCTIONS = '以下のテキストを要約してください。要点を簡潔にまとめ、重要な情報を保持してください。';
 
 const UploadPage = () => {
   const navigate = useNavigate();
   const [files, setFiles] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [instructions, setInstructions] = useState('');
+  const { setCustomInstructions } = useSummaryStore();
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     // 画像ファイルのみを受け入れる
@@ -59,7 +64,10 @@ const UploadPage = () => {
       // OCR処理を実行 (日本語テキストを想定)
       const imageIds = uploadedImages.map(image => image.id);
       const ocrResponse = await processOCR(imageIds, 'ja');
-      
+
+      // カスタム指示をストアに保存
+      setCustomInstructions(instructions);
+
       // 要約結果ページに遷移
       navigate(`/result/${ocrResponse.job_id}`);
     } catch (error) {
@@ -121,7 +129,7 @@ const UploadPage = () => {
                     {(file.size / 1024).toFixed(1)} KB
                   </p>
                 </div>
-                <button 
+                <button
                   onClick={() => removeFile(index)}
                   className="ml-2 text-muted-foreground hover:text-destructive"
                 >
@@ -132,6 +140,22 @@ const UploadPage = () => {
           </div>
         </div>
       )}
+
+      <div className="space-y-2">
+        <label htmlFor="instructions" className="block text-sm font-medium">
+          要約の指示（任意）
+        </label>
+        <textarea
+          id="instructions"
+          value={instructions}
+          onChange={(e) => setInstructions(e.target.value)}
+          className="w-full p-3 border rounded-md h-24 resize-none"
+          placeholder={DEFAULT_INSTRUCTIONS}
+        />
+        <p className="text-xs text-muted-foreground">
+          空欄の場合はデフォルトの指示を使用します
+        </p>
+      </div>
 
       <div className="flex justify-center">
         <button

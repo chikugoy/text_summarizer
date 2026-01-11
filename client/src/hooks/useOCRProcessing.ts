@@ -22,9 +22,13 @@ export interface UseOCRProcessingResult extends OCRProcessingState {
 /**
  * OCR処理と要約生成を管理するフック
  * @param jobId OCRジョブID
+ * @param customInstructions カスタム要約指示（省略時はデフォルトの要約指示）
  * @returns OCR処理状態と操作関数
  */
-export const useOCRProcessing = (jobId: string | undefined): UseOCRProcessingResult => {
+export const useOCRProcessing = (
+  jobId: string | undefined,
+  customInstructions?: string
+): UseOCRProcessingResult => {
   const [state, setState] = useState<OCRProcessingState>({
     loading: true,
     error: null,
@@ -93,8 +97,8 @@ export const useOCRProcessing = (jobId: string | undefined): UseOCRProcessingRes
       const imageDetail = await getImageDetail(imageId);
       const summaryId = imageDetail.summary_id;
 
-      // 要約を生成
-      const summary = await generateSummary(summaryId);
+      // 要約を生成（カスタム指示がある場合は渡す）
+      const summary = await generateSummary(summaryId, customInstructions || undefined);
 
       setState({
         loading: false,
@@ -112,7 +116,7 @@ export const useOCRProcessing = (jobId: string | undefined): UseOCRProcessingRes
         status: 'failed',
       }));
     }
-  }, [jobId]);
+  }, [jobId, customInstructions]);
 
   useEffect(() => {
     processOCRAndSummarize();

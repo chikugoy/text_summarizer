@@ -18,6 +18,8 @@ interface SummaryState {
   recentSummaries: SummaryBase[];
   /** キャッシュされた要約詳細 */
   summaryCache: Map<string, SummaryDetail>;
+  /** 要約生成時のカスタム指示 */
+  customInstructions: string;
 }
 
 interface SummaryActions {
@@ -33,6 +35,10 @@ interface SummaryActions {
   removeFromRecent: (id: string) => void;
   /** キャッシュをクリア */
   clearCache: () => void;
+  /** カスタム指示を設定 */
+  setCustomInstructions: (instructions: string) => void;
+  /** カスタム指示をクリア */
+  clearCustomInstructions: () => void;
 }
 
 type SummaryStore = SummaryState & SummaryActions;
@@ -49,6 +55,7 @@ export const useSummaryStore = create<SummaryStore>((set, get) => ({
   currentSummary: null,
   recentSummaries: [],
   summaryCache: new Map(),
+  customInstructions: '',
 
   // アクション
   setCurrentSummary: (summary) => {
@@ -102,5 +109,13 @@ export const useSummaryStore = create<SummaryStore>((set, get) => ({
       summaryCache: new Map(),
       currentSummary: null,
     });
+  },
+
+  setCustomInstructions: (instructions) => {
+    set({ customInstructions: instructions });
+  },
+
+  clearCustomInstructions: () => {
+    set({ customInstructions: '' });
   },
 }));

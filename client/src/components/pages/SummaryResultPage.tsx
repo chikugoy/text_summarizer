@@ -4,12 +4,13 @@
  * OCR処理と要約生成の結果を表示し、保存機能を提供する。
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Clipboard, Save, Loader2 } from 'lucide-react';
 import { toast } from '@/components/ui/use-toast';
 import { createSummary } from '@/services';
 import { useOCRProcessing, useClipboard } from '@/hooks';
+import { useSummaryStore } from '@/stores';
 
 // ============================================
 // 保存フォームコンポーネント
@@ -116,10 +117,18 @@ const SummaryResultPage = () => {
   const { jobId } = useParams<{ jobId: string }>();
   const navigate = useNavigate();
   const { copyToClipboard } = useClipboard();
+  const { customInstructions, clearCustomInstructions } = useSummaryStore();
 
-  const { loading, error, originalText, summarizedText } = useOCRProcessing(jobId);
+  const { loading, error, originalText, summarizedText } = useOCRProcessing(jobId, customInstructions);
   const [showSaveForm, setShowSaveForm] = useState(false);
   const [showOriginalText, setShowOriginalText] = useState(false);
+
+  // 処理完了後にカスタム指示をクリア
+  useEffect(() => {
+    if (!loading && !error) {
+      clearCustomInstructions();
+    }
+  }, [loading, error, clearCustomInstructions]);
 
   const handleCopyToClipboard = () => {
     copyToClipboard(summarizedText);
