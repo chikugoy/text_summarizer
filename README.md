@@ -25,10 +25,17 @@ text_summarizer/
 ├── client/                    # フロントエンド (Vite + React)
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── organisms/     # Header, Footer
+│   │   │   ├── organisms/     # Header, Footer, Modals
 │   │   │   ├── pages/         # 各ページコンポーネント
 │   │   │   ├── templates/     # レイアウトテンプレート
-│   │   │   └── ui/            # UIコンポーネント (shadcn/ui)
+│   │   │   └── ui/            # UIコンポーネント (shadcn/ui + Modal)
+│   │   ├── hooks/             # カスタムフック
+│   │   │   ├── useOCRProcessing.ts   # OCR処理・要約生成
+│   │   │   ├── useSummary.ts         # 要約CRUD
+│   │   │   ├── useSummaries.ts       # 要約一覧
+│   │   │   └── useClipboard.ts       # クリップボード操作
+│   │   ├── stores/            # Zustand状態管理
+│   │   │   └── summaryStore.ts       # 要約キャッシュ
 │   │   ├── services/          # API通信サービス
 │   │   ├── lib/               # ユーティリティ
 │   │   ├── App.tsx
@@ -42,6 +49,19 @@ text_summarizer/
 │   │   ├── models/            # SQLAlchemyモデル
 │   │   ├── schemas/           # Pydanticスキーマ
 │   │   ├── services/          # ビジネスロジック
+│   │   │   ├── interfaces.py        # サービスインターフェース
+│   │   │   ├── summary_service.py   # AI要約処理
+│   │   │   ├── ocr_service.py       # OCR処理
+│   │   │   ├── ocr_orchestrator.py  # OCR統合処理
+│   │   │   ├── job_manager.py       # ジョブ管理
+│   │   │   ├── file_service.py      # ファイル操作
+│   │   │   ├── prompts.py           # プロンプトテンプレート
+│   │   │   └── text_utils.py        # テキスト分割
+│   │   ├── utils/             # ユーティリティ
+│   │   │   ├── constants.py         # 定数定義
+│   │   │   └── db_helpers.py        # DBヘルパー
+│   │   ├── exceptions.py      # カスタム例外
+│   │   ├── dependencies.py    # 依存性注入
 │   │   ├── config.py          # 設定
 │   │   └── database.py        # DB接続
 │   ├── alembic/               # DBマイグレーション
@@ -49,7 +69,49 @@ text_summarizer/
 │   ├── requirements.txt
 │   └── Dockerfile
 ├── docker-compose.yml
+├── CLAUDE.md                  # Claude Code用ガイダンス
 └── README.md
+```
+
+## アーキテクチャ設計
+
+### 設計原則
+
+- **単一責任の原則 (SRP)**: 各クラス・コンポーネントは一つの責任に集中
+- **依存性注入 (DI)**: サービスはファクトリ関数経由で取得
+- **カスタムフック**: データフェッチング・ビジネスロジックをReactフックに抽出
+- **型安全性**: TypeScript/Python型ヒントによる堅牢なコード
+
+### サーバー側
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│   Endpoints     │────▶│   Dependencies  │────▶│    Services     │
+│   (API層)       │     │   (DI Container)│     │ (ビジネスロジック)│
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+                                                        │
+                        ┌───────────────────────────────┼───────────────────────────────┐
+                        │                               │                               │
+                        ▼                               ▼                               ▼
+               ┌─────────────────┐             ┌─────────────────┐             ┌─────────────────┐
+               │ SummaryService  │             │   OCRService    │             │  FileService    │
+               │ (AI要約処理)     │             │ (OCR処理)       │             │ (ファイル操作)  │
+               └─────────────────┘             └─────────────────┘             └─────────────────┘
+```
+
+### クライアント側
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│     Pages       │────▶│  Custom Hooks   │────▶│    Services     │
+│ (UIコンポーネント)│     │ (ロジック抽出)   │     │   (API通信)     │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+        │                       │
+        │                       ▼
+        │               ┌─────────────────┐
+        │               │  Zustand Store  │
+        │               │  (状態管理)      │
+        └──────────────▶└─────────────────┘
 ```
 
 ## データモデル設計
@@ -198,6 +260,9 @@ npm install
 
 # 開発モードで実行
 npm run dev
+
+# TypeScript型チェック
+npx tsc --noEmit
 ```
 
 フロントエンドサーバー: `http://localhost:5173`
@@ -221,25 +286,34 @@ python main.py
 
 ### server/.env
 
+すべての設定は`server/.env`ファイルで管理します。`server/.env.example`をコピーして使用してください。
+
 ```bash
-# アプリケーション設定
-APP_NAME=TextSummarizer
-DEBUG=True
+cp server/.env.example server/.env
+```
 
-# データベース設定
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/text_summarizer_db
+主要な設定項目:
 
-# ファイルストレージ設定
-UPLOAD_DIR=./uploads
-MAX_UPLOAD_SIZE=10485760  # 10MB
+```bash
+# データベース設定（Docker Compose使用時）
+DATABASE_URL=postgresql://postgres:postgres@postgres:5432/text_summarizer_db
 
 # OCR設定
 OCR_LANGUAGE=ja
+# Google Cloud Vision使用時
+GOOGLE_APPLICATION_CREDENTIALS=./app/services/google-service-account.json
 
 # AI設定
-AI_API_KEY=your-api-key-here
-AI_MODEL=gpt-4o  # 使用するAIモデル
+AI_MODEL=gemini-1.5-pro  # 使用するAIモデル
+
+# AIプロバイダーのAPIキー（使用するモデルに対応するキーを設定）
+GEMINI_API_KEY=your-gemini-api-key      # gemini-* モデル用
+# OPENAI_API_KEY=sk-xxx                 # gpt-*, o1-* モデル用
+# ANTHROPIC_API_KEY=sk-ant-xxx          # claude-* モデル用
+# COHERE_API_KEY=xxx                    # command-* モデル用
 ```
+
+詳細は`server/.env.example`を参照してください。
 
 ## ライセンス
 

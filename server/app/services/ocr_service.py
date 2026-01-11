@@ -1,11 +1,20 @@
+"""OCRサービスモジュール
+
+Google Vision APIまたはPaddleOCRを使用して画像からテキストを抽出する。
+"""
+
+import logging
 import os
 import uuid
-import sys
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
+
 from PIL import Image as PILImage
 
 from app.config import settings
+from app.exceptions import OCRProcessingError
 from app.models import Image
+
+logger = logging.getLogger(__name__)
 
 try:
     from google.cloud import vision
@@ -38,21 +47,31 @@ class BaseOCRService:
         
         for image in images:
             try:
-                ocr_text = self.process_image(image.file_path)                
-                print(f"ocr_text: {ocr_text}", file=sys.stderr)
+                ocr_text = self.process_image(image.file_path)
+                logger.debug(f"OCR結果: image_id={image.id}, text_length={len(ocr_text)}")
                 self._jobs[job_id]["results"][str(image.id)] = {
                     "image_id": image.id,
                     "ocr_text": ocr_text,
                     "success": True,
-                    "error": None
+                    "error": None,
                 }
                 self._jobs[job_id]["completed"] += 1
-            except Exception as e:
+            except OCRProcessingError as e:
+                logger.error(f"OCR処理失敗: image_id={image.id}, error={e.message}")
                 self._jobs[job_id]["results"][str(image.id)] = {
                     "image_id": image.id,
                     "ocr_text": "",
                     "success": False,
-                    "error": str(e)
+                    "error": e.message,
+                }
+                self._jobs[job_id]["completed"] += 1
+            except (OSError, IOError) as e:
+                logger.error(f"ファイル読み取りエラー: image_id={image.id}, error={e}")
+                self._jobs[job_id]["results"][str(image.id)] = {
+                    "image_id": image.id,
+                    "ocr_text": "",
+                    "success": False,
+                    "error": f"ファイル読み取りエラー: {e}",
                 }
                 self._jobs[job_id]["completed"] += 1
         
@@ -90,26 +109,36 @@ class GoogleVisionOCRService(BaseOCRService):
         return self._client
     
     def process_image(self, image_path: str) -> str:
-        """Google Vision APIで画像からテキストを抽出"""
+        """Google Vision APIで画像からテキストを抽出
+
+        Args:
+            image_path: 処理する画像のパス
+
+        Returns:
+            抽出されたテキスト
+
+        Raises:
+            OCRProcessingError: OCR処理に失敗した場合
+        """
         try:
-            with open(image_path, 'rb') as image_file:
+            with open(image_path, "rb") as image_file:
                 content = image_file.read()
-            
+
             image = vision.Image(content=content)
             response = self.client.document_text_detection(image=image)
-            
+
             if response.error.message:
                 raise GoogleAPICallError(response.error.message)
-            
+
             if response.full_text_annotation:
                 return response.full_text_annotation.text
             return ""
         except GoogleAPICallError as e:
-            print(f"Google Vision APIエラー: {str(e)}")
-            return ""
-        except Exception as e:
-            print(f"OCR処理エラー: {str(e)}")
-            return ""
+            logger.error(f"Google Vision APIエラー: {e}")
+            raise OCRProcessingError(f"Google Vision APIエラー: {e}") from e
+        except FileNotFoundError as e:
+            logger.error(f"画像ファイルが見つかりません: {image_path}")
+            raise OCRProcessingError(f"画像ファイルが見つかりません: {image_path}") from e
 
 class PaddleOCRService(BaseOCRService):
     """PaddleOCRを使用したOCRサービス"""
@@ -127,32 +156,55 @@ class PaddleOCRService(BaseOCRService):
         return self._ocr
     
     def process_image(self, image_path: str) -> str:
-        """PaddleOCRで画像からテキストを抽出"""
+        """PaddleOCRで画像からテキストを抽出
+
+        Args:
+            image_path: 処理する画像のパス
+
+        Returns:
+            抽出されたテキスト
+
+        Raises:
+            OCRProcessingError: OCR処理に失敗した場合
+        """
         try:
-            img = PILImage.open(image_path)
+            PILImage.open(image_path)  # 画像の検証
             result = self.ocr.ocr(image_path, cls=True)
-            
+
             extracted_text = ""
             if result:
                 for line in result:
                     for word_info in line:
                         if len(word_info) >= 2:
                             text = word_info[1][0]
-                            text = text.encode('utf-8', errors='ignore').decode('utf-8')
+                            text = text.encode("utf-8", errors="ignore").decode("utf-8")
                             extracted_text += text + " "
                     extracted_text += "\n"
-            
-            return extracted_text.strip()
-        except Exception as e:
-            print(f"OCR処理エラー: {str(e)}")
-            return ""
 
-# 使用可能なOCRサービスを選択
-if HAS_GOOGLE_VISION and settings.GOOGLE_APPLICATION_CREDENTIALS:
-    print(f"Google Vision API start (credentials: {settings.GOOGLE_APPLICATION_CREDENTIALS})", file=sys.stderr)
-    sys.stderr.flush()
-    ocr_service = GoogleVisionOCRService()
-else:
-    print(f"PaddleOCRService start (Google credentials: {settings.GOOGLE_APPLICATION_CREDENTIALS})", file=sys.stderr)
-    sys.stderr.flush()
-    ocr_service = PaddleOCRService()
+            return extracted_text.strip()
+        except FileNotFoundError as e:
+            logger.error(f"画像ファイルが見つかりません: {image_path}")
+            raise OCRProcessingError(f"画像ファイルが見つかりません: {image_path}") from e
+        except (OSError, IOError) as e:
+            logger.error(f"画像読み込みエラー: {image_path}, error={e}")
+            raise OCRProcessingError(f"画像読み込みエラー: {e}") from e
+
+def get_ocr_service() -> BaseOCRService:
+    """使用可能なOCRサービスを取得する
+
+    Google Vision APIの認証情報が設定されている場合はGoogle Visionを使用し、
+    そうでない場合はPaddleOCRを使用する。
+
+    Returns:
+        OCRサービスインスタンス
+    """
+    if HAS_GOOGLE_VISION and settings.GOOGLE_APPLICATION_CREDENTIALS:
+        logger.info(f"Google Vision OCRサービスを初期化")
+        return GoogleVisionOCRService()
+    else:
+        logger.info("PaddleOCRサービスを初期化")
+        return PaddleOCRService()
+
+
+# デフォルトのOCRサービスインスタンス
+ocr_service = get_ocr_service()

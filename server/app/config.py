@@ -85,6 +85,10 @@ class Settings(BaseSettings):
         Returns:
             プロバイダー名（openai, anthropic, gemini, cohere）
         """
+        # プレフィックス付きモデル名の場合
+        if model.startswith("gemini/"):
+            return "gemini"
+
         if model.startswith("gpt-") or model.startswith("o1-"):
             return "openai"
         elif model.startswith("claude-"):
@@ -94,6 +98,28 @@ class Settings(BaseSettings):
         elif model.startswith("command-"):
             return "cohere"
         return "openai"  # デフォルト
+
+    def get_litellm_model_name(self, model: str) -> str:
+        """LiteLLM用のモデル名を取得する
+
+        LiteLLMでは、Google AI Studio（APIキー認証）を使用する場合、
+        モデル名に 'gemini/' プレフィックスが必要。
+
+        Args:
+            model: AIモデル名
+
+        Returns:
+            LiteLLM用のモデル名
+        """
+        # 既にプレフィックスが付いている場合はそのまま返す
+        if "/" in model:
+            return model
+
+        # Geminiモデルの場合、gemini/ プレフィックスを付ける
+        if model.startswith("gemini-"):
+            return f"gemini/{model}"
+
+        return model
 
     model_config = {
         "env_file": ".env",

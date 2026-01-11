@@ -10,76 +10,23 @@ from typing import List, Optional
 
 import litellm
 from litellm import completion
+from litellm.exceptions import RateLimitError as LiteLLMRateLimitError
 
 from app.config import settings
+from app.exceptions import (
+    AIClientError,
+    ConfigurationError,
+    RateLimitError,
+    SummaryGenerationError,
+)
+from app.services.prompts import PromptTemplates
+from app.services.text_utils import TextSplitter
 
 # LiteLLMの設定
 litellm.drop_params = True
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
-
-
-# プロンプトテンプレート定数
-class PromptTemplates:
-    """プロンプトテンプレートを管理するクラス"""
-
-    SYSTEM = "あなたは優秀なアシスタントです。"
-
-    DEFAULT_INSTRUCTION = (
-        "以下のテキストを要約してください。"
-        "要点を簡潔にまとめ、重要な情報を保持してください。"
-    )
-
-    CHUNK = """
-{instructions}
-
-テキスト:
-{text}
-
-結果:
-"""
-
-    DIRECT = """
-{instructions}
-
-テキスト:
-{text}
-
-結果:
-"""
-
-
-class TextSplitter:
-    """テキスト分割を担当するクラス"""
-
-    @staticmethod
-    def split_by_paragraphs(text: str, max_length: int) -> List[str]:
-        """テキストを段落ごとに分割する
-
-        Args:
-            text: 分割するテキスト
-            max_length: チャンクの最大長
-
-        Returns:
-            分割されたテキストのリスト
-        """
-        paragraphs = [p for p in text.split("\n\n") if p.strip()]
-        chunks: List[str] = []
-        current_chunk = ""
-
-        for para in paragraphs:
-            if len(current_chunk) + len(para) + 2 <= max_length:
-                current_chunk += para + "\n\n"
-            else:
-                if current_chunk:
-                    chunks.append(current_chunk.strip())
-                current_chunk = para + "\n\n"
-
-        if current_chunk:
-            chunks.append(current_chunk.strip())
-
-        return chunks
 
 
 class AIClient:
@@ -92,7 +39,8 @@ class AIClient:
             model: 使用するAIモデル名
             api_key: APIキー
         """
-        self.model = model
+        # LiteLLM用のモデル名に変換
+        self.model = settings.get_litellm_model_name(model)
         self.api_key = api_key
         self._setup_environment()
 
@@ -128,7 +76,8 @@ class AIClient:
             AIの応答テキスト
 
         Raises:
-            Exception: API呼び出しに失敗した場合
+            RateLimitError: レート制限に達した場合
+            AIClientError: API呼び出しに失敗した場合
         """
         temp = temperature if temperature is not None else settings.AI_TEMPERATURE
 
@@ -144,11 +93,8 @@ class AIClient:
                 )
                 return response.choices[0].message.content
 
-            except Exception as e:
-                error_str = str(e).lower()
-                is_rate_limit = "rate_limit" in error_str or "429" in error_str
-
-                if is_rate_limit and attempt < settings.AI_MAX_RETRIES - 1:
+            except LiteLLMRateLimitError as e:
+                if attempt < settings.AI_MAX_RETRIES - 1:
                     delay = settings.AI_RETRY_DELAY * (2**attempt)
                     logger.warning(
                         f"レート制限エラー。{delay}秒後にリトライします "
@@ -156,8 +102,11 @@ class AIClient:
                     )
                     time.sleep(delay)
                 else:
-                    logger.error(f"API呼び出し失敗: {e}")
-                    raise
+                    logger.error(f"レート制限エラー: リトライ上限に達しました")
+                    raise RateLimitError() from e
+            except (ConnectionError, TimeoutError) as e:
+                logger.error(f"接続エラー: {e}")
+                raise AIClientError(f"AI APIへの接続に失敗しました: {e}") from e
 
 
 class SummaryService:
@@ -166,16 +115,23 @@ class SummaryService:
     テキストを要約またはカスタム指示に従って処理する。
     """
 
-    def __init__(self):
-        """初期化"""
+    def __init__(self, client: Optional[AIClient] = None):
+        """初期化
+
+        Args:
+            client: AIクライアント（省略時は設定から自動生成）
+        """
         self.model = settings.AI_MODEL
         self.api_key = settings.get_api_key_for_model(self.model)
-        self.client: Optional[AIClient] = None
 
-        if self.api_key:
+        if client:
+            self.client = client
+            logger.info(f"SummaryService初期化完了: 外部クライアント使用")
+        elif self.api_key:
             self.client = AIClient(self.model, self.api_key)
             logger.info(f"SummaryService初期化完了: モデル={self.model}")
         else:
+            self.client = None
             logger.warning(
                 "APIキーが設定されていません。要約機能は利用できません。"
                 "環境変数でOPENAI_API_KEY、ANTHROPIC_API_KEY等を設定してください。"
@@ -196,9 +152,15 @@ class SummaryService:
 
         Returns:
             処理結果のテキスト
+
+        Raises:
+            ConfigurationError: クライアントが初期化されていない場合
+            SummaryGenerationError: 要約生成に失敗した場合
         """
         if not self.client:
-            return "処理エンジンが初期化されていません。APIキーを設定してください。"
+            raise ConfigurationError(
+                "処理エンジンが初期化されていません。APIキーを設定してください。"
+            )
 
         if not text:
             return ""
@@ -206,9 +168,9 @@ class SummaryService:
         # テキストのエンコーディングを統一
         try:
             text = text.encode("utf-8", errors="ignore").decode("utf-8")
-        except Exception as e:
+        except UnicodeError as e:
             logger.error(f"テキストエンコーディング処理エラー: {e}")
-            return f"テキスト処理中にエラーが発生しました: {e}"
+            raise SummaryGenerationError(f"テキスト処理中にエラーが発生しました: {e}") from e
 
         instructions = custom_instructions or PromptTemplates.DEFAULT_INSTRUCTION
         logger.info(f"処理開始: テキスト長={len(text)}, 指示={instructions[:50]}...")
@@ -218,9 +180,9 @@ class SummaryService:
                 return self._process_long_text(text, max_length, instructions)
             else:
                 return self._process_short_text(text, instructions)
-        except Exception as e:
-            logger.error(f"処理エラー: {e}")
-            return f"処理中にエラーが発生しました: {e}"
+        except (RateLimitError, AIClientError) as e:
+            logger.error(f"AI API処理エラー: {e}")
+            raise SummaryGenerationError(str(e)) from e
 
     def _process_short_text(self, text: str, instructions: str) -> str:
         """短いテキストを直接処理する
@@ -250,11 +212,15 @@ class SummaryService:
 
         Returns:
             処理結果（各チャンクの結果を結合）
+
+        Raises:
+            SummaryGenerationError: 全てのチャンク処理に失敗した場合
         """
         logger.info("長いテキストを分割して処理します")
 
         chunks = TextSplitter.split_by_paragraphs(text, max_length)
         results: List[str] = []
+        errors: List[str] = []
 
         for i, chunk in enumerate(chunks):
             try:
@@ -270,13 +236,22 @@ class SummaryService:
                 if i < len(chunks) - 1:
                     time.sleep(settings.AI_CHUNK_DELAY)
 
-            except Exception as e:
-                error_msg = f"チャンク {i + 1} の処理中にエラー: {e}"
+            except RateLimitError:
+                error_msg = f"チャンク {i + 1}: レート制限エラー"
                 logger.error(error_msg)
-                results.append(f"[エラー: {e}]")
+                errors.append(error_msg)
+            except AIClientError as e:
+                error_msg = f"チャンク {i + 1}: {e.message}"
+                logger.error(error_msg)
+                errors.append(error_msg)
 
         if not results:
-            return "処理中にエラーが発生しました。"
+            raise SummaryGenerationError(
+                f"全てのチャンク処理に失敗しました: {'; '.join(errors)}"
+            )
+
+        if errors:
+            logger.warning(f"一部のチャンク処理に失敗: {errors}")
 
         return "\n\n".join(results)
 
