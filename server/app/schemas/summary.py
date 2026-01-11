@@ -22,6 +22,7 @@ class SummaryUpdate(BaseModel):
 class SummaryGenerate(BaseModel):
     """要約生成リクエスト"""
     summary_id: UUID = Field(..., description="要約ID")
+    custom_instructions: Optional[str] = Field(None, description="カスタム指示（デフォルトは要約）")
 
 
 # レスポンス用スキーマ
@@ -30,6 +31,7 @@ class SummaryBase(BaseModel):
     id: UUID
     title: str
     description: Optional[str] = None
+    custom_instructions: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

@@ -1,208 +1,73 @@
-from typing import List, Dict, Any, Optional
+"""テキスト要約サービスモジュール
+
+LiteLLMを使用して複数のAIプロバイダーでテキスト要約を行う。
+"""
+
 import logging
+import os
 import time
+from typing import List, Optional
+
 import litellm
 from litellm import completion
-litellm.drop_params = True
 
 from app.config import settings
+
+# LiteLLMの設定
+litellm.drop_params = True
 
 # ロガーの設定
 logger = logging.getLogger(__name__)
 
-# プロンプトテンプレート
-SYSTEM_PROMPT = "あなたは優秀な要約者です。"
-CHUNK_PROMPT_TEMPLATE = """
-以下のテキストの要点を簡潔にまとめてください:
 
-{text}
+# プロンプトテンプレート定数
+class PromptTemplates:
+    """プロンプトテンプレートを管理するクラス"""
 
-要点:
-"""
+    SYSTEM = "あなたは優秀なアシスタントです。"
 
-COMBINE_PROMPT_TEMPLATE = """
-以下の複数の要約を統合して、全体の要約を作成してください:
+    DEFAULT_INSTRUCTION = (
+        "以下のテキストを要約してください。"
+        "要点を簡潔にまとめ、重要な情報を保持してください。"
+    )
 
-{summaries}
-
-統合された要約:
-"""
-
-DIRECT_SUMMARY_TEMPLATE = """
-以下のテキストを要約してください。要点を簡潔にまとめ、重要な情報を保持してください。
+    CHUNK = """
+{instructions}
 
 テキスト:
 {text}
 
-要約:
+結果:
 """
 
-class SummaryService:
-    """テキスト要約サービス"""
-    
-    def __init__(self):
-        """初期化"""
-        # APIキーの設定を確認（AI_API_KEYを優先、なければOPENAI_API_KEYを使用）
-        self.api_key = settings.AI_API_KEY or settings.OPENAI_API_KEY
-        
-        if self.api_key:
-            logger.info(f"APIキーが設定されています (長さ: {len(self.api_key)})")
-            self.model = settings.AI_MODEL
-            
-            # LiteLLMにAPIキーを設定
-            self._setup_litellm_api_key()
-            
-            logger.info(f"使用モデル: {self.model}")
-        else:
-            self.api_key = None
-            self.model = None
-            logger.warning("AI_API_KEYまたはOPENAI_API_KEYが設定されていません。要約機能は利用できません。")
-    
-    def _setup_litellm_api_key(self):
-        """モデルに応じてLiteLLMのAPI環境変数を設定"""
-        import os
-        
-        # モデル名からプロバイダーを判定
-        if self.model.startswith("gpt-") or self.model.startswith("o1-"):
-            os.environ["OPENAI_API_KEY"] = self.api_key
-        elif self.model.startswith("claude-"):
-            os.environ["ANTHROPIC_API_KEY"] = self.api_key
-        elif self.model.startswith("gemini-"):
-            os.environ["GEMINI_API_KEY"] = self.api_key
-        elif self.model.startswith("command-"):
-            os.environ["COHERE_API_KEY"] = self.api_key
-        else:
-            # デフォルトでOpenAIとして扱う
-            os.environ["OPENAI_API_KEY"] = self.api_key
-    
-    def summarize_text(self, text: str, max_length: int = 1000000) -> str:
-        """テキストを要約する"""
-        if not self.api_key:
-            return "要約エンジンが初期化されていません。環境変数AI_API_KEYを設定してください。"
-        
-        if not text:
-            return ""
-            
-        # テキストのエンコーディングを統一（UTF-8）
-        try:
-            text = text.encode('utf-8', errors='ignore').decode('utf-8')
-        except Exception as e:
-            logger.error(f"テキストエンコーディング処理エラー: {str(e)}")
-            return f"テキスト処理中にエラーが発生しました: {str(e)}"
-        
-        try:
-            logger.debug(f"テキスト長: {len(text)}")
-            
-            # テキストが長すぎる場合は分割して要約
-            if len(text) > max_length:
-                return self._summarize_long_text(text, max_length)
-            else:
-                # 短いテキストの場合は直接要約
-                return self._summarize_short_text(text)
-                
-        except Exception as e:
-            logger.error(f"要約処理エラー: {str(e)}")
-            return f"要約処理中にエラーが発生しました: {str(e)}"
-    
-    def _summarize_long_text(self, text: str, max_length: int) -> str:
-        """長いテキストを分割して要約する"""
-        logger.info("長いテキストを分割して要約します")
-        
-        # 段落ごとにテキストを分割
-        chunks = self._split_text_by_paragraphs(text, max_length)
-        
-        # 各チャンクを個別に要約
-        summaries = []
-        for i, chunk in enumerate(chunks):
-            try:
-                logger.info(f"チャンク {i+1}/{len(chunks)} を要約中...")
-                chunk_summary = self._call_openai_api(
-                    CHUNK_PROMPT_TEMPLATE.format(text=chunk)
-                )
-                summaries.append(chunk_summary)
-                time.sleep(60)
-                logger.info(f"チャンク {i+1} の要約が完了しました")
-            except Exception as e:
-                error_msg = f"チャンク {i+1} の要約中にエラーが発生しました: {str(e)}"
-                logger.error(error_msg)
-                summaries.append(f"要約エラー: {str(e)}")
-        
-        # 要約を結合
-        if not summaries:
-            return "要約処理中にエラーが発生しました。テキストが長すぎるか、形式が不適切です。"
-            
-        if len(summaries) == 1:
-            return summaries[0]
-        
-        combined_summaries = "\n\n".join(summaries)
-        return combined_summaries
-        
-        # # 結合した要約が短い場合はそのまま返す
-        # if len(combined_summaries) < 4000:
-        #     return combined_summaries
-        
-        # # 結合した要約をさらに要約
-        # try:
-        #     logger.info("最終要約を生成中...")
-        #     final_summary = self._call_openai_api(
-        #         COMBINE_PROMPT_TEMPLATE.format(summaries=combined_summaries)
-        #     )
-        #     logger.info("最終要約が完了しました")
-        #     return final_summary
-        # except Exception as e:
-        #     error_msg = f"最終要約中にエラーが発生しました: {str(e)}"
-        #     logger.error(error_msg)
-        #     # エラーが発生した場合は結合した要約をそのまま返す
-        #     return combined_summaries
-    
-    def _summarize_short_text(self, text: str) -> str:
-        """短いテキストを直接要約する"""
-        logger.info("短いテキストを直接要約します")
-        try:
-            prompt = DIRECT_SUMMARY_TEMPLATE.format(text=text)
-            summary = self._call_openai_api(prompt)
-            logger.info("要約が完了しました")
-            return summary
-        except Exception as e:
-            error_msg = f"要約中にエラーが発生しました: {str(e)}"
-            logger.error(error_msg)
-            return f"要約処理中にエラーが発生しました: {str(e)}"
-    
-    def _call_openai_api(self, prompt: str) -> str:
-        """LiteLLMを使用してAPIを呼び出す"""
-        max_retries = 3
-        retry_delay = 60  # 秒
-        
-        for attempt in range(max_retries):
-            try:
-                response = completion(
-                    model=self.model,
-                    messages=[
-                        {"role": "system", "content": SYSTEM_PROMPT},
-                        {"role": "user", "content": prompt}
-                    ],
-                    temperature=0.3,
-                )
-                return response.choices[0].message.content
-                
-            except Exception as e:
-                if "rate_limit" in str(e).lower():
-                    if attempt < max_retries - 1:
-                        logger.warning(f"Rate limit exceeded. Retrying in {retry_delay} seconds... (Attempt {attempt + 1}/{max_retries})")
-                        time.sleep(retry_delay)
-                        retry_delay *= 2  # Exponential backoff
-                    else:
-                        raise
-                else:
-                    logger.error(f"API call failed: {str(e)}")
-                    raise
-    
-    def _split_text_by_paragraphs(self, text: str, max_length: int) -> List[str]:
-        """テキストを段落ごとに分割する"""
-        paragraphs = [p for p in text.split('\n\n') if p.strip()]
-        chunks = []
+    DIRECT = """
+{instructions}
+
+テキスト:
+{text}
+
+結果:
+"""
+
+
+class TextSplitter:
+    """テキスト分割を担当するクラス"""
+
+    @staticmethod
+    def split_by_paragraphs(text: str, max_length: int) -> List[str]:
+        """テキストを段落ごとに分割する
+
+        Args:
+            text: 分割するテキスト
+            max_length: チャンクの最大長
+
+        Returns:
+            分割されたテキストのリスト
+        """
+        paragraphs = [p for p in text.split("\n\n") if p.strip()]
+        chunks: List[str] = []
         current_chunk = ""
-        
+
         for para in paragraphs:
             if len(current_chunk) + len(para) + 2 <= max_length:
                 current_chunk += para + "\n\n"
@@ -210,32 +75,210 @@ class SummaryService:
                 if current_chunk:
                     chunks.append(current_chunk.strip())
                 current_chunk = para + "\n\n"
-        
+
         if current_chunk:
             chunks.append(current_chunk.strip())
-            
+
         return chunks
-    
-    def _split_text_by_words(self, text: str, max_length: int = 2000) -> List[str]:
-        """テキストを単語単位で分割する"""
-        words = text.split()
-        chunks = []
-        current_chunk = []
-        current_length = 0
-        
-        for word in words:
-            if current_length + len(word) + 1 > max_length:
-                chunks.append(" ".join(current_chunk))
-                current_chunk = [word]
-                current_length = len(word)
+
+
+class AIClient:
+    """AI APIクライアントを管理するクラス"""
+
+    def __init__(self, model: str, api_key: str):
+        """初期化
+
+        Args:
+            model: 使用するAIモデル名
+            api_key: APIキー
+        """
+        self.model = model
+        self.api_key = api_key
+        self._setup_environment()
+
+    def _setup_environment(self) -> None:
+        """LiteLLM用の環境変数を設定する"""
+        provider = settings.get_provider_for_model(self.model)
+
+        env_key_mapping = {
+            "openai": "OPENAI_API_KEY",
+            "anthropic": "ANTHROPIC_API_KEY",
+            "gemini": "GEMINI_API_KEY",
+            "cohere": "COHERE_API_KEY",
+        }
+
+        env_key = env_key_mapping.get(provider, "OPENAI_API_KEY")
+        os.environ[env_key] = self.api_key
+        logger.info(f"AIクライアント初期化: モデル={self.model}, プロバイダー={provider}")
+
+    def call(
+        self,
+        prompt: str,
+        system_prompt: str = PromptTemplates.SYSTEM,
+        temperature: Optional[float] = None,
+    ) -> str:
+        """AIモデルを呼び出す
+
+        Args:
+            prompt: ユーザープロンプト
+            system_prompt: システムプロンプト
+            temperature: 生成の温度パラメータ
+
+        Returns:
+            AIの応答テキスト
+
+        Raises:
+            Exception: API呼び出しに失敗した場合
+        """
+        temp = temperature if temperature is not None else settings.AI_TEMPERATURE
+
+        for attempt in range(settings.AI_MAX_RETRIES):
+            try:
+                response = completion(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=temp,
+                )
+                return response.choices[0].message.content
+
+            except Exception as e:
+                error_str = str(e).lower()
+                is_rate_limit = "rate_limit" in error_str or "429" in error_str
+
+                if is_rate_limit and attempt < settings.AI_MAX_RETRIES - 1:
+                    delay = settings.AI_RETRY_DELAY * (2**attempt)
+                    logger.warning(
+                        f"レート制限エラー。{delay}秒後にリトライします "
+                        f"(試行 {attempt + 1}/{settings.AI_MAX_RETRIES})"
+                    )
+                    time.sleep(delay)
+                else:
+                    logger.error(f"API呼び出し失敗: {e}")
+                    raise
+
+
+class SummaryService:
+    """テキスト要約サービス
+
+    テキストを要約またはカスタム指示に従って処理する。
+    """
+
+    def __init__(self):
+        """初期化"""
+        self.model = settings.AI_MODEL
+        self.api_key = settings.get_api_key_for_model(self.model)
+        self.client: Optional[AIClient] = None
+
+        if self.api_key:
+            self.client = AIClient(self.model, self.api_key)
+            logger.info(f"SummaryService初期化完了: モデル={self.model}")
+        else:
+            logger.warning(
+                "APIキーが設定されていません。要約機能は利用できません。"
+                "環境変数でOPENAI_API_KEY、ANTHROPIC_API_KEY等を設定してください。"
+            )
+
+    def summarize_text(
+        self,
+        text: str,
+        max_length: int = 1000000,
+        custom_instructions: Optional[str] = None,
+    ) -> str:
+        """テキストを処理する
+
+        Args:
+            text: 処理するテキスト
+            max_length: チャンク分割の閾値
+            custom_instructions: カスタム指示（省略時はデフォルトの要約指示）
+
+        Returns:
+            処理結果のテキスト
+        """
+        if not self.client:
+            return "処理エンジンが初期化されていません。APIキーを設定してください。"
+
+        if not text:
+            return ""
+
+        # テキストのエンコーディングを統一
+        try:
+            text = text.encode("utf-8", errors="ignore").decode("utf-8")
+        except Exception as e:
+            logger.error(f"テキストエンコーディング処理エラー: {e}")
+            return f"テキスト処理中にエラーが発生しました: {e}"
+
+        instructions = custom_instructions or PromptTemplates.DEFAULT_INSTRUCTION
+        logger.info(f"処理開始: テキスト長={len(text)}, 指示={instructions[:50]}...")
+
+        try:
+            if len(text) > max_length:
+                return self._process_long_text(text, max_length, instructions)
             else:
-                current_chunk.append(word)
-                current_length += len(word) + 1  # +1 for space
-        
-        if current_chunk:
-            chunks.append(" ".join(current_chunk))
-        
-        return chunks
+                return self._process_short_text(text, instructions)
+        except Exception as e:
+            logger.error(f"処理エラー: {e}")
+            return f"処理中にエラーが発生しました: {e}"
+
+    def _process_short_text(self, text: str, instructions: str) -> str:
+        """短いテキストを直接処理する
+
+        Args:
+            text: 処理するテキスト
+            instructions: 処理指示
+
+        Returns:
+            処理結果
+        """
+        logger.info("短いテキストを直接処理します")
+        prompt = PromptTemplates.DIRECT.format(instructions=instructions, text=text)
+        result = self.client.call(prompt)
+        logger.info("処理完了")
+        return result
+
+    def _process_long_text(
+        self, text: str, max_length: int, instructions: str
+    ) -> str:
+        """長いテキストを分割して処理する
+
+        Args:
+            text: 処理するテキスト
+            max_length: チャンクの最大長
+            instructions: 処理指示
+
+        Returns:
+            処理結果（各チャンクの結果を結合）
+        """
+        logger.info("長いテキストを分割して処理します")
+
+        chunks = TextSplitter.split_by_paragraphs(text, max_length)
+        results: List[str] = []
+
+        for i, chunk in enumerate(chunks):
+            try:
+                logger.info(f"チャンク {i + 1}/{len(chunks)} を処理中...")
+                prompt = PromptTemplates.CHUNK.format(
+                    instructions=instructions, text=chunk
+                )
+                chunk_result = self.client.call(prompt)
+                results.append(chunk_result)
+                logger.info(f"チャンク {i + 1} の処理完了")
+
+                # レート制限対策のため待機（最後のチャンク以外）
+                if i < len(chunks) - 1:
+                    time.sleep(settings.AI_CHUNK_DELAY)
+
+            except Exception as e:
+                error_msg = f"チャンク {i + 1} の処理中にエラー: {e}"
+                logger.error(error_msg)
+                results.append(f"[エラー: {e}]")
+
+        if not results:
+            return "処理中にエラーが発生しました。"
+
+        return "\n\n".join(results)
 
 
 # シングルトンインスタンス

@@ -14,6 +14,7 @@ class Summary(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
+    custom_instructions = Column(Text, nullable=True)  # カスタム指示
     original_text = Column(Text, nullable=False)
     summarized_text = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
