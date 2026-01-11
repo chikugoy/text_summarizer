@@ -20,6 +20,7 @@ google-cloud-vision==3.4.4
 # AI/ML
 langchain==0.0.335
 openai==1.2.4
+litellm==1.35.17
 
 # Utilities
 python-jose==3.3.0  # JWT

@@ -1,7 +1,9 @@
 from typing import List, Dict, Any, Optional
 import logging
 import time
-from openai import OpenAI, RateLimitError
+import litellm
+from litellm import completion
+litellm.drop_params = True
 
 from app.config import settings
 
@@ -40,25 +42,43 @@ class SummaryService:
     
     def __init__(self):
         """初期化"""
-        # APIキーの設定を確認
-        if settings.OPENAI_API_KEY:
-            logger.info(f"OpenAI APIキーが設定されています (長さ: {len(settings.OPENAI_API_KEY)})")
-            self.api_key = settings.OPENAI_API_KEY
+        # APIキーの設定を確認（AI_API_KEYを優先、なければOPENAI_API_KEYを使用）
+        self.api_key = settings.AI_API_KEY or settings.OPENAI_API_KEY
+        
+        if self.api_key:
+            logger.info(f"APIキーが設定されています (長さ: {len(self.api_key)})")
             self.model = settings.AI_MODEL
-            self.client = OpenAI(api_key=self.api_key)
+            
+            # LiteLLMにAPIキーを設定
+            self._setup_litellm_api_key()
+            
             logger.info(f"使用モデル: {self.model}")
         else:
             self.api_key = None
             self.model = None
-            self.client = None
-            logger.warning("OPENAI_API_KEYが設定されていません。要約機能は利用できません。")
+            logger.warning("AI_API_KEYまたはOPENAI_API_KEYが設定されていません。要約機能は利用できません。")
     
-    def summarize_text(self, text: str, max_length: int = 25000) -> str:
-        return ""
-
+    def _setup_litellm_api_key(self):
+        """モデルに応じてLiteLLMのAPI環境変数を設定"""
+        import os
+        
+        # モデル名からプロバイダーを判定
+        if self.model.startswith("gpt-") or self.model.startswith("o1-"):
+            os.environ["OPENAI_API_KEY"] = self.api_key
+        elif self.model.startswith("claude-"):
+            os.environ["ANTHROPIC_API_KEY"] = self.api_key
+        elif self.model.startswith("gemini-"):
+            os.environ["GEMINI_API_KEY"] = self.api_key
+        elif self.model.startswith("command-"):
+            os.environ["COHERE_API_KEY"] = self.api_key
+        else:
+            # デフォルトでOpenAIとして扱う
+            os.environ["OPENAI_API_KEY"] = self.api_key
+    
+    def summarize_text(self, text: str, max_length: int = 1000000) -> str:
         """テキストを要約する"""
         if not self.api_key:
-            return "要約エンジンが初期化されていません。環境変数OPENAI_API_KEYを設定してください。"
+            return "要約エンジンが初期化されていません。環境変数AI_API_KEYを設定してください。"
         
         if not text:
             return ""
@@ -149,13 +169,13 @@ class SummaryService:
             return f"要約処理中にエラーが発生しました: {str(e)}"
     
     def _call_openai_api(self, prompt: str) -> str:
-        """OpenAI APIを呼び出す"""
+        """LiteLLMを使用してAPIを呼び出す"""
         max_retries = 3
         retry_delay = 60  # 秒
         
         for attempt in range(max_retries):
             try:
-                response = self.client.chat.completions.create(
+                response = completion(
                     model=self.model,
                     messages=[
                         {"role": "system", "content": SYSTEM_PROMPT},
@@ -165,16 +185,17 @@ class SummaryService:
                 )
                 return response.choices[0].message.content
                 
-            except RateLimitError:
-                if attempt < max_retries - 1:
-                    logger.warning(f"Rate limit exceeded. Retrying in {retry_delay} seconds... (Attempt {attempt + 1}/{max_retries})")
-                    time.sleep(retry_delay)
-                    retry_delay *= 2  # Exponential backoff
-                else:
-                    raise
             except Exception as e:
-                logger.error(f"OpenAI API call failed: {str(e)}")
-                raise
+                if "rate_limit" in str(e).lower():
+                    if attempt < max_retries - 1:
+                        logger.warning(f"Rate limit exceeded. Retrying in {retry_delay} seconds... (Attempt {attempt + 1}/{max_retries})")
+                        time.sleep(retry_delay)
+                        retry_delay *= 2  # Exponential backoff
+                    else:
+                        raise
+                else:
+                    logger.error(f"API call failed: {str(e)}")
+                    raise
     
     def _split_text_by_paragraphs(self, text: str, max_length: int) -> List[str]:
         """テキストを段落ごとに分割する"""

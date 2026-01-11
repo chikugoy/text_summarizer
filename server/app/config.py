@@ -25,8 +25,10 @@ class Settings(BaseSettings):
     GOOGLE_APPLICATION_CREDENTIALS: Optional[str] = None
     
     # AI設定
-    OPENAI_API_KEY: Optional[str] = None
+    AI_API_KEY: Optional[str] = None
     AI_MODEL: str = "gpt-4o"
+    # 後方互換性のため残す
+    OPENAI_API_KEY: Optional[str] = None
     
     @validator("UPLOAD_DIR")
     def create_upload_dir(cls, v):
